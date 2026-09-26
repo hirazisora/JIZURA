@@ -39251,15 +39251,35 @@ function bind() {
     const selected=input.value.slice(start,end), kind=button.dataset.lyricInsert;
     const pairs={cut:['/','/'],break:['\\n','\\n'],strong:['*','*'],soft:['~','~'],scene:['{','}'],separate:['{-','-}'],empty:['｜','｜']};
     let [before,after]=pairs[kind], middle=selected;
-    if (kind==='empty' && !selected) middle='　　　　';
+    if (kind==='empty') {
+      // Preserve the selected text's half/full-width spacing, but remove its glyphs.
+      const blank = selected ? [...selected].map(ch=>ch==='\n'?'\n':/[\u0000-\u007f\uff61-\uff9f]/.test(ch)?' ':'　').join('') : '　　　　';
+      before=start && input.value[start-1]!=='\n'?'\n':'';
+      middle=blank.split('\n').map(line=>'｜'+(line || '　　　　')+'｜').join('\n');
+      after='\n';
+    }
     if (kind==='cut' || kind==='break') { if (!selected) after=''; }
     if (kind==='scene' || kind==='separate') {
       before=(start && input.value[start-1]!=='\n'?'\n':'')+before+'\n';
       after='\n'+after+(end<input.value.length && input.value[end]!=='\n'?'\n':'');
     }
+    // Commit pending typing first, then give every helper click its own undo step.
+    clearTimeout(replanTimer); recordUndoState(); markUndoGroup(null); U.lastGroup=null;
     input.setRangeText(before+middle+after,start,end,'end');
-    input.focus(); input.setSelectionRange(start+before.length,start+before.length+middle.length);
-    input.dispatchEvent(new Event('input',{bubbles:true}));
+    reconcileLyricLines(S.project.lyrics,input.value);
+    S.project.lyrics=input.value;
+    replan();
+    input.focus();
+    const cursor=start+before.length+middle.length+after.length;
+    if (kind==='empty') input.setSelectionRange(cursor,cursor);
+    else input.setSelectionRange(start+before.length,start+before.length+middle.length);
+  });
+  $('lyrics').addEventListener('keydown', e => {
+    if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+    if (e.code==='KeyZ' || e.code==='KeyY') {
+      e.preventDefault(); e.stopPropagation();
+      undoMove(e.code==='KeyY' || e.shiftKey ? 1 : -1);
+    }
   });
   $('lyrics').addEventListener('input', e => {
     const changedCount = reconcileLyricLines(S.project.lyrics, e.target.value);
