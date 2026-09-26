@@ -771,7 +771,23 @@ function removeLyricCut(line,part) {
   S.project.lyricCutOptions[key]={...S.project.lyricCutOptions[key],removed:true};
   replan();
 }
+function openTimelineAssetPicker(layer,index){
+  if(S.exporting || S.tap)return;
+  const cut=S.plan[layer]?.cuts[index];if(!cut)return;
+  pause();
+  const m=S.project[layer],project=S.project,L=J.mediaLabel;
+  const dialog=document.createElement('dialog');dialog.id='timelineAssetDialog';
+  dialog.innerHTML=`<form method="dialog"><h2>${L('素材を変更','Change asset')}</h2><label>${L('素材','Asset')} <select id="timelineAssetSelect"><option value="">${L('画像無し','No image')}</option>${[...J.mediaCopyItems(layer),...m.items].map(item=>`<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)}</option>`).join('')}</select></label><p class="note"></p><div class="row"><button value="cancel">${L('キャンセル','Cancel')}</button><button value="apply">${L('適用','Apply')}</button></div></form>`;
+  const select=dialog.querySelector('select');select.value=cut.itemId || '';
+  if(m.randomOrder){select.disabled=true;dialog.querySelector('[value="apply"]').disabled=true;dialog.querySelector('p').textContent=L('素材を指定するにはランダム順をオフにしてください','Turn off random order to select a file');}
+  dialog.addEventListener('close',()=>{
+    if(dialog.returnValue==='apply' && S.project===project){const options=mediaCutOptions(layer,index);mediaOv(index,{itemId:select.value || null,...(options?.lock?{lockedItemId:select.value || null}:{})},layer);replan();}
+    dialog.remove();
+  },{once:true});
+  document.body.append(dialog);dialog.showModal();select.focus();
+}
 function performTimelineAction(control) {
+  if (control.dataset.action==='asset'){openTimelineAssetPicker(control.dataset.layer,+control.dataset.index);return;}
   if (control.classList.contains('item-frame-action') && S.playing) return;
   const layer = control.dataset.layer, index = +control.dataset.index;
   if (!Number.isInteger(index) || index < 0) return;
@@ -850,7 +866,12 @@ function drawTimelineLinks() {
     const canvas=$('timeline'), x=canvas.offsetLeft+c.start/S.plan.duration*canvas.clientWidth+10;
     return `<g class="timeline-action" data-action="details" data-layer="lyrics" data-index="${c.index}" data-part="blank" role="button" tabindex="0" aria-label="${J.mediaLabel('カットの詳細編集','Edit cut details')}" transform="translate(${x} ${canvas.offsetTop+33})"><rect x="-9" y="-9" width="18" height="18" rx="3"/>${ICON.details.replace('<svg ','<svg x="-7" y="-7" width="14" height="14" ')}</g>`;
   }).join('');
-  const mediaActions = ['foreground', 'media'].map(layer => S.plan[layer].cuts.map(cut => action(layer, cut, cut.index, !!mediaCutOptions(layer, cut.index).lock)).join('')).join('');
+  const mediaActions = ['foreground', 'media'].map(layer => S.plan[layer].cuts.map(cut => {
+    const canvas=$(layer==='foreground'?'foregroundTimeline':'mediaTimeline'),duration=Math.max(.001,S.plan.duration);
+    const x=canvas.offsetLeft+cut.start/duration*canvas.clientWidth+5,width=(cut.end-cut.start)/duration*canvas.clientWidth-10;
+    const hit=width>35?`<g class="timeline-action timeline-asset-name" data-action="asset" data-layer="${layer}" data-index="${cut.index}" role="button" tabindex="0" aria-label="${escapeHtml(cut.name)}: ${J.mediaLabel('素材を変更','Change asset')}"><title>${escapeHtml(cut.name)}: ${J.mediaLabel('素材を変更','Change asset')}</title><rect x="${x}" y="${canvas.offsetTop+18}" width="${width}" height="18" style="fill:transparent;stroke:none"/></g>`:'';
+    return action(layer,cut,cut.index,!!mediaCutOptions(layer,cut.index).lock)+hit;
+  }).join('')).join('');
   svg.innerHTML = links + preview + handles + lyricActions + frontmostActions + blankActions + mediaActions;
 }
 function markerNear(clientX, clientY, sourceLayer) {
