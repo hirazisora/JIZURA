@@ -1,6 +1,8 @@
 /* Isolated technique previews: never replace or save the editor project. */
 (() => {
 'use strict';
+// Label/export tooling also loads src files without browser APIs.
+if (typeof Image === 'undefined') return;
 let dialog, canvas, heading, frame=0, generation=0, assetId=null;
 const image=new Image();image.src='__EFFECT_PREVIEW_IMAGE__';
 function stop(){generation++;cancelAnimationFrame(frame);frame=0;if(assetId)J.mediaAssets.delete(assetId);assetId=null;}
