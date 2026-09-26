@@ -66,7 +66,14 @@ J.openEffectPreview=async(group,key,layer='lyrics')=>{
     await J.ensureFonts('プレビュールビ',J.fontsOfPlan(plan));
     if(token!==generation||!dialog.open)return;
     const renderer=new J.Renderer(),start=performance.now();
-    const draw=now=>{if(token!==generation||!dialog.open)return;const t=((now-start)/1000)%6;renderer.frame(canvas.getContext('2d'),plan,t,{scale:canvas.width/plan.W,noHud:true});frame=requestAnimationFrame(draw);};
+    let offset=0,cycle=6;
+    if(layer==='lyrics'?group==='exit':def.stage==='exit'){
+      const cut=layer==='lyrics'?plan.cuts[0]:plan[layer].cuts[0];
+      const exitDuration=layer==='lyrics'?cut.outDur:Math.min(cut.effectSettings?.duration || .45,(cut.end-cut.start)*.3);
+      offset=Math.max(cut.start,cut.end-exitDuration-.5);
+      cycle=cut.end-offset;
+    }
+    const draw=now=>{if(token!==generation||!dialog.open)return;const t=offset+((now-start)/1000)%cycle;renderer.frame(canvas.getContext('2d'),plan,t,{scale:canvas.width/plan.W,noHud:true});frame=requestAnimationFrame(draw);};
     frame=requestAnimationFrame(draw);
   }catch(err){if(token!==generation)return;error.textContent=J.mediaLabel('プレビューを再生できませんでした：','Could not play preview: ')+err.message;error.hidden=false;stop();}
 };
