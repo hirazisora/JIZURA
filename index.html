@@ -3865,6 +3865,7 @@ J.plan = (project, audio) => {
         if (pick) { const D2 = J.FXE[pick]; const d = (D2.dur || 4) * F; addEvent(cs - (D2.pre ? D2.pre * F : 0), pick, (D2.amp || 1) * (0.7 + 0.5 * g + (emph ? 0.3 : 0)), d); fxHistory.push(pick); }
       }
       if (dur > 1.1) { const pick = pickFx(rng, st, en, fx, emph, fxHistory, 'mid'); if (pick) { const D2 = J.FXE[pick]; addEvent(cs + rng.range(0.4, 0.75) * dur, pick, (D2.amp || 1) * (0.5 + 0.4 * g), (D2.dur || 3) * F); } }
+      for (let j = eventStart; j < plan.events.length; j++) plan.events[j].cutOwner = `${li}:${k}`;
       if (suppressed) for (let j = eventStart; j < plan.events.length; j++) plan.events[j].amp *= 0.25;
     });
     // interlude in long gaps
@@ -5450,22 +5451,23 @@ J.mediaBeatState=(cut,p,w,h)=>{
 (() => {
 'use strict';
 J.cutDetailKeys = {
-  lyrics: ['text','layout','enter','hold','exit','inDur','outDur','stagger','decor','scheme','params','treat','treatP','bg','bgP','cam','camP','trans','transP','transDur','area','motionScale','contentScale','fonts','palette','fontParams'],
+  lyrics: ['text','layout','enter','hold','exit','inDur','outDur','stagger','decor','scheme','params','treat','treatP','bg','bgP','cam','camP','trans','transP','transDur','area','motionScale','contentScale','fonts','palette','fontParams','seed','effectEvents','effectStyle','effectFx'],
   media: ['enter','exit','independentPhases','layout','hold','treat','trans','transP','transDur','effectSettings','bpm','beatOffset'],
 };
 J.applyCutDetails = (cut, details, plan, layer) => {
   if (!details || typeof details !== 'object') return;
   const copy = value => JSON.parse(JSON.stringify(value));
+  if (layer === 'lyrics' && Number.isFinite(details.seed)) cut.seed=details.seed;
   if (details.trans && details.trans !== 'none' && details.trans !== cut.trans) {
     const def=J.TRANS[details.trans];
     cut.transDur=def?.dur || .35;
     cut.transP=def?.plan ? def.plan(J.rng(cut.seed),plan.style) : {};
   }
   if (layer === 'lyrics') {
-    const cutStyle = details.fonts ? {...plan.style,fonts:details.fonts} : plan.style;
+    const cutStyle = {...(details.effectStyle || plan.style),...(details.fonts ? {fonts:details.fonts} : {})};
     const area = details.area || cut.area;
     for (const [key, param, registry] of [['layout','params',J.LAYOUTS],['treat','treatP',J.TREAT],['bg','bgP',J.BG],['cam','camP',J.CAMERA],['trans','transP',J.TRANS]]) {
-      const rebuildLayout = key === 'layout' && (details.area !== undefined || details.text !== undefined || details.layout !== undefined && details.params === undefined);
+      const rebuildLayout = key === 'layout' && (details.area !== undefined || details.text !== undefined || details.layout !== undefined || details.params !== undefined);
       if (!rebuildLayout && (details[key] === undefined || details[key] === cut[key])) continue;
       const def = registry[details[key] ?? cut[key]], rng = J.rng(cut.seed);
       cut[param] = def?.plan ? (key === 'layout' ? def.plan(rng, {
@@ -5475,7 +5477,10 @@ J.applyCutDetails = (cut, details, plan, layer) => {
     }
   }
   for (const key of J.cutDetailKeys[layer === 'lyrics' ? 'lyrics' : 'media']) {
-    if (Object.prototype.hasOwnProperty.call(details,key)) cut[key] = copy(details[key]);
+    if (Object.prototype.hasOwnProperty.call(details,key)) {
+      if (layer === 'lyrics' && key === 'params') cut.params = {...cut.params,...copy(details.params)};
+      else cut[key] = copy(details[key]);
+    }
   }
   if (layer === 'lyrics' && Array.isArray(details.fontParams)) {
     for (const entry of details.fontParams) {
@@ -5497,6 +5502,16 @@ J.plan = function(project, ...args) {
   for (const cut of plan.cuts) if (Number.isInteger(cut.part) && cut.line >= 0) {
     J.applyCutDetails(cut,project.lyricCutOptions?.[`${cut.line}:${cut.part}`]?.details,plan,'lyrics');
   }
+  // Events belong to their originating cut, including accents before its boundary.
+  for (const cut of plan.cuts) if (Array.isArray(cut.effectEvents)) {
+    const owner=`${cut.line}:${cut.part}`;
+    plan.events=plan.events.filter(event=>event.cutOwner!==owner);
+    for (const {offset,...event} of cut.effectEvents) {
+      const t=cut.start+offset;
+      if (t<cut.end && t<plan.duration) plan.events.push({...event,t,cutOwner:owner});
+    }
+  }
+  plan.events.sort((a,b)=>a.t-b.t);
   // Retained groups use the final cut's edited departure.
   const last = new Map();
   for (const cut of plan.cuts) if (cut.group != null && Number.isInteger(cut.part)) last.set(cut.group,cut);
@@ -5518,7 +5533,7 @@ J.planMedia = function(project, plan, audioDuration, layer='media') {
 (() => {
 'use strict';
 const clone=v=>JSON.parse(JSON.stringify(v));
-const lyricKeys=['layout','enter','hold','exit','inDur','outDur','stagger','decor','scheme','treat','treatP','bg','bgP','cam','camP','trans','transP','transDur','motionScale','contentScale','fonts','palette','fontParams'];
+const lyricKeys=['layout','enter','hold','exit','inDur','outDur','stagger','decor','scheme','treat','treatP','bg','bgP','cam','camP','trans','transP','transDur','motionScale','contentScale','fonts','palette','fontParams','params','seed','effectEvents','effectStyle','effectFx'];
 const mediaKeys=['layout','enter','hold','exit','treat','trans','transP','transDur','effectSettings','bpm','beatOffset','independentPhases'];
 const pick=(value,keys)=>Object.fromEntries(keys.filter(k=>value[k]!==undefined).map(k=>[k,clone(value[k])]));
 J.cutFontParams = value => {
@@ -5536,6 +5551,11 @@ J.cutEffectsPayload=(cut,layer,plan)=>{
     details.fonts=clone(cut.fonts || plan.style.fonts);
     details.palette=clone(cut.palette || plan.style.schemes[cut.scheme % plan.style.schemes.length] || plan.style.schemes[0]);
     details.fontParams=J.cutFontParams(cut.params);
+    details.effectStyle=clone(cut.effectStyle || plan.style);
+    details.effectFx=clone(cut.effectFx || plan.fx);
+    details.effectEvents=clone(cut.effectEvents || plan.events.filter(event=>event.cutOwner===`${cut.line}:${cut.part}`).map(({t,cutOwner,...event})=>({...event,offset:t-cut.start})));
+    // These layout fields contain lyric strings, not visual settings.
+    for (const key of ['chunks','msgs','units']) if (Array.isArray(details.params?.[key])) delete details.params[key];
   }
   if(kind==='media' && details.effectSettings)details.effectSettings=pick(details.effectSettings,['motion','treatment','duration']);
   return {format:'jizura-cut-effects',version:1,kind,details,native:pick(cut,kind==='lyrics'?['blend','opacity','frontmost']:['technique','entrance','departure','chromaKey','chromaColor'])};
@@ -5551,6 +5571,8 @@ J.readCutEffects=text=>{
   const d=payload.details,n=payload.native;
   if(!Object.keys(d).length)throw Error('invalid');
   if(data.kind==='lyrics'){
+    for(const key of ['params','effectStyle','effectFx'])if(d[key]!==undefined&&(!d[key]||typeof d[key]!=='object'||Array.isArray(d[key])))throw Error('invalid');
+    if(d.effectEvents!==undefined&&(!Array.isArray(d.effectEvents)||d.effectEvents.some(ev=>!ev||typeof ev.type!=='string'||!Number.isFinite(ev.offset)||!Number.isFinite(ev.amp)||!Number.isFinite(ev.dur)||ev.dur<0)))throw Error('invalid');
     if(d.fonts!==undefined && (!d.fonts || typeof d.fonts!=='object' || Array.isArray(d.fonts) || Object.values(d.fonts).some(role=>!Array.isArray(role)||role.some(font=>typeof font!=='string'))))throw Error('invalid');
     if(d.palette!==undefined && (!d.palette || typeof d.palette!=='object' || Array.isArray(d.palette) || Object.values(d.palette).some(color=>typeof color!=='string')))throw Error('invalid');
     if(d.fontParams!==undefined && (!Array.isArray(d.fontParams) || d.fontParams.some(entry=>!entry || !Array.isArray(entry.path) || entry.path.some(key=>typeof key!=='string'||['__proto__','constructor','prototype'].includes(key)) || typeof entry.font!=='string')))throw Error('invalid');
@@ -5563,14 +5585,14 @@ J.readCutEffects=text=>{
     if(n.technique!==undefined&&!['none','legacy'].includes(n.technique)&&!Object.hasOwn(J.MEDIA_TECH,n.technique))throw Error('invalid');
     for(const key of ['entrance','departure'])if(n[key]!=null&&typeof n[key]!=='string')throw Error('invalid');
   }
-  for(const key of ['inDur','outDur','stagger','scheme','transDur','motionScale','contentScale','bpm','beatOffset'])if(d[key]!==undefined&&!Number.isFinite(d[key]))throw Error('invalid');
+  for(const key of ['inDur','outDur','stagger','scheme','transDur','motionScale','contentScale','bpm','beatOffset','seed'])if(d[key]!==undefined&&!Number.isFinite(d[key]))throw Error('invalid');
   return payload;
 };
 J.pasteCutEffects=(project,plan,layer,cut,payload)=>{
   if(payload.kind!==(layer==='lyrics'?'lyrics':'media'))throw Error('incompatible');
   if(layer==='lyrics'){
     const key=`${cut.line}:${cut.part}`,old=project.lyricCutOptions[key]||{};
-    // Preserve edited text and area; regenerate layout geometry for the target text.
+    // Keep target text and display area while retaining the exact visual parameters.
     const preserved=pick(old.details||{},['text','area']);
     project.lyricCutOptions[key]={...old,...clone(payload.native),details:{...clone(payload.details),...preserved}};
   }else{
@@ -5668,7 +5690,8 @@ class Renderer {
     }
     const mediaCut = !opt.noMedia && !opt.transparent && plan.media && J.mediaAt(plan, t);
     const backgroundMedia = J.mediaSourceAvailable(mediaCut);
-    const fx = plan.fx, st = plan.style, fps = plan.fps;
+    const effectCut = J.cutAt(plan,t);
+    const fx = effectCut?.effectFx || plan.fx, st = effectCut?.effectStyle || plan.style, fps = plan.fps;
     // motion is quantised to 'koma' drawings per second (24fps timebase); random flicker runs on a <=24Hz clock
     const stepDur = J.stepDur(fx, fps);
     const clock = J.komaOf(fx) > 0 ? stepDur : 1 / 24;
@@ -5883,8 +5906,8 @@ class Renderer {
   makeEnv(ctx, plan, cut, sc, o) {
     const area = cut && cut.area && !o.bgOnly && !o.fullFrame ? cut.area : null;
     const W = area ? plan.W * area.w : plan.W, H = area ? plan.H * area.h : plan.H;
-    const env = Object.assign({ ctx, W, H, sc: cut?.palette || sc, st: cut?.fonts ? {...plan.style,fonts:cut.fonts} : plan.style, fx: plan.fx, fps: plan.fps, cut, plan }, o);
-    if (cut && cut.motionScale < 1) env.fx = Object.assign({}, plan.fx, { motion: plan.fx.motion * cut.motionScale });
+    const env = Object.assign({ ctx, W, H, sc: cut?.palette || sc, st: {...(cut?.effectStyle || plan.style),...(cut?.fonts ? {fonts:cut.fonts} : {})}, fx: cut?.effectFx || plan.fx, fps: plan.fps, cut, plan }, o);
+    if (cut && cut.motionScale < 1) env.fx = Object.assign({}, env.fx, { motion: env.fx.motion * cut.motionScale });
     if (cut) {
       env.pIn = J.clamp(o.lt / Math.max(0.01, cut.inDur));
       env.pOut = cut.outDur > 0 ? J.clamp((o.lt - (cut.dur - cut.outDur)) / cut.outDur) : 0;
@@ -5961,7 +5984,8 @@ class Renderer {
 
   post(ctx, plan, t, tq, step, sc, scale, opt, allowFilter) {
     const cw = ctx.canvas.width, ch = ctx.canvas.height;
-    const fx = plan.fx, st = plan.style;
+    const effectCut = J.cutAt(plan,tq);
+    const fx = effectCut?.effectFx || plan.fx, st = effectCut?.effectStyle || plan.style;
     const active = plan.events.filter(ev => t >= ev.t && t < ev.t + Math.max(ev.dur, 1 / plan.fps));
     const needScratch = active.some(ev => ['slice', 'block', 'zoom', 'mosaic'].includes(ev.type) || (J.FXE[ev.type] && J.FXE[ev.type].scratch)) || (!opt.fast && (st.glow || 0) > 0);
     const S = needScratch ? this.ensure(this.scratch, cw, ch) : null;
@@ -5975,7 +5999,7 @@ class Renderer {
       if (D && D.draw) {
         if (D.scratch) copy();
         try {
-          D.draw(ctx, ev, k, { cw, ch, S, sc, st: plan.style, step: st2, t, scale, renderer: this, allowFilter, opt, tmp: (w, h) => this.ensure(this.tiny, w, h), tmp2: (w, h) => this.ensure(this.small2 || (this.small2 = mk(2, 2)), w, h) });
+          D.draw(ctx, ev, k, { cw, ch, S, sc, st, step: st2, t, scale, renderer: this, allowFilter, opt, tmp: (w, h) => this.ensure(this.tiny, w, h), tmp2: (w, h) => this.ensure(this.small2 || (this.small2 = mk(2, 2)), w, h) });
         } catch (e) { console.warn('fx', ev.type, e); }
         ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over'; ctx.filter = 'none'; ctx.imageSmoothingEnabled = true;
         continue;

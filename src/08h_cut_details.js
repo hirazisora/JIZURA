@@ -3,22 +3,23 @@
 (() => {
 'use strict';
 J.cutDetailKeys = {
-  lyrics: ['text','layout','enter','hold','exit','inDur','outDur','stagger','decor','scheme','params','treat','treatP','bg','bgP','cam','camP','trans','transP','transDur','area','motionScale','contentScale','fonts','palette','fontParams'],
+  lyrics: ['text','layout','enter','hold','exit','inDur','outDur','stagger','decor','scheme','params','treat','treatP','bg','bgP','cam','camP','trans','transP','transDur','area','motionScale','contentScale','fonts','palette','fontParams','seed','effectEvents','effectStyle','effectFx'],
   media: ['enter','exit','independentPhases','layout','hold','treat','trans','transP','transDur','effectSettings','bpm','beatOffset'],
 };
 J.applyCutDetails = (cut, details, plan, layer) => {
   if (!details || typeof details !== 'object') return;
   const copy = value => JSON.parse(JSON.stringify(value));
+  if (layer === 'lyrics' && Number.isFinite(details.seed)) cut.seed=details.seed;
   if (details.trans && details.trans !== 'none' && details.trans !== cut.trans) {
     const def=J.TRANS[details.trans];
     cut.transDur=def?.dur || .35;
     cut.transP=def?.plan ? def.plan(J.rng(cut.seed),plan.style) : {};
   }
   if (layer === 'lyrics') {
-    const cutStyle = details.fonts ? {...plan.style,fonts:details.fonts} : plan.style;
+    const cutStyle = {...(details.effectStyle || plan.style),...(details.fonts ? {fonts:details.fonts} : {})};
     const area = details.area || cut.area;
     for (const [key, param, registry] of [['layout','params',J.LAYOUTS],['treat','treatP',J.TREAT],['bg','bgP',J.BG],['cam','camP',J.CAMERA],['trans','transP',J.TRANS]]) {
-      const rebuildLayout = key === 'layout' && (details.area !== undefined || details.text !== undefined || details.layout !== undefined && details.params === undefined);
+      const rebuildLayout = key === 'layout' && (details.area !== undefined || details.text !== undefined || details.layout !== undefined || details.params !== undefined);
       if (!rebuildLayout && (details[key] === undefined || details[key] === cut[key])) continue;
       const def = registry[details[key] ?? cut[key]], rng = J.rng(cut.seed);
       cut[param] = def?.plan ? (key === 'layout' ? def.plan(rng, {
@@ -28,7 +29,10 @@ J.applyCutDetails = (cut, details, plan, layer) => {
     }
   }
   for (const key of J.cutDetailKeys[layer === 'lyrics' ? 'lyrics' : 'media']) {
-    if (Object.prototype.hasOwnProperty.call(details,key)) cut[key] = copy(details[key]);
+    if (Object.prototype.hasOwnProperty.call(details,key)) {
+      if (layer === 'lyrics' && key === 'params') cut.params = {...cut.params,...copy(details.params)};
+      else cut[key] = copy(details[key]);
+    }
   }
   if (layer === 'lyrics' && Array.isArray(details.fontParams)) {
     for (const entry of details.fontParams) {
@@ -50,6 +54,16 @@ J.plan = function(project, ...args) {
   for (const cut of plan.cuts) if (Number.isInteger(cut.part) && cut.line >= 0) {
     J.applyCutDetails(cut,project.lyricCutOptions?.[`${cut.line}:${cut.part}`]?.details,plan,'lyrics');
   }
+  // Events belong to their originating cut, including accents before its boundary.
+  for (const cut of plan.cuts) if (Array.isArray(cut.effectEvents)) {
+    const owner=`${cut.line}:${cut.part}`;
+    plan.events=plan.events.filter(event=>event.cutOwner!==owner);
+    for (const {offset,...event} of cut.effectEvents) {
+      const t=cut.start+offset;
+      if (t<cut.end && t<plan.duration) plan.events.push({...event,t,cutOwner:owner});
+    }
+  }
+  plan.events.sort((a,b)=>a.t-b.t);
   // Retained groups use the final cut's edited departure.
   const last = new Map();
   for (const cut of plan.cuts) if (cut.group != null && Number.isInteger(cut.part)) last.set(cut.group,cut);
