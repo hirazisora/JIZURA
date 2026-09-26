@@ -28,5 +28,16 @@ await page.locator('#mediaLineList .effect-paste').first().click();await page.wa
 await page.locator('#sourceLyrics').click();const beforeMismatch=await page.evaluate(()=>JSON.stringify(J.ui.project));await cuts.first().locator('.effect-paste').click();assert.equal(await page.evaluate(()=>JSON.stringify(J.ui.project)),beforeMismatch);
 assert.ok(await page.locator('#timelineLinks [data-action="copy"][data-part="0"]').count()>0);assert.ok(await page.locator('#itemFrames [data-action="paste"]').count()>0);
 await page.evaluate(()=>{const cv=document.createElement('canvas');cv.width=320;cv.height=180;for(const t of [.2,4.3])new J.Renderer().frame(cv.getContext('2d'),J.ui.plan,t,{scale:320/J.ui.plan.W});J.uiApi.flushSave()});
-await page.reload();assert.equal(await page.evaluate(()=>J.ui.project.lyricCutOptions['1:0'].opacity),43);assert.deepEqual(errors,[]);console.log(locale||'ja','clipboard, isolation, media transfer, fallback, undo and persistence passed');await page.close();}
+await page.reload();assert.equal(await page.evaluate(()=>J.ui.project.lyricCutOptions['1:0'].opacity),43);const pastedBefore=await page.evaluate(()=>JSON.parse(JSON.stringify(J.ui.project.lyricCutOptions['1:0'])));
+const seedBefore=await page.evaluate(()=>J.ui.plan.cuts.find(c=>c.line===1&&c.part===0).seed);
+await page.locator('#timelineLinks [data-action="dice"][data-layer="lyrics"][data-index="1"]').first().dispatchEvent('pointerdown');
+assert.equal(await page.evaluate(()=>J.ui.project.lyricCutOptions['1:0'].details.seed),undefined);
+assert.notEqual(await page.evaluate(()=>J.ui.plan.cuts.find(c=>c.line===1&&c.part===0).seed),seedBefore);
+assert.deepEqual(await page.evaluate(()=>J.ui.project.lyricCutOptions['1:0'].details),{text:pastedBefore.details.text,area:pastedBefore.details.area});
+await page.locator('#btnUndo').click();assert.deepEqual(await page.evaluate(()=>J.ui.project.lyricCutOptions['1:0']),pastedBefore);
+await page.locator('#btnRedo').click();assert.equal(await page.evaluate(()=>J.ui.project.lyricCutOptions['1:0'].details.seed),undefined);
+// Global randomization respects locked lines and old pasted projects without a marker.
+await page.evaluate(()=>{const p=J.ui.project;p.lyricCutOptions['0:0'].details={seed:42,effectEvents:[],text:'keep'};delete p.lyricCutOptions['0:0'].pastedEffects;p.overrides[0].lock=true;J.clearPastedLyricEffects(p);if(p.lyricCutOptions['0:0'].details.seed!==42)throw Error('locked paste cleared');p.overrides[0].lock=false;J.clearPastedLyricEffects(p);if(p.lyricCutOptions['0:0'].details.seed!==undefined||p.lyricCutOptions['0:0'].details.text!=='keep')throw Error('legacy paste not cleared')});
+assert.deepEqual(errors,[]);console.log(locale||'ja','clipboard, isolation, media transfer, fallback, undo and persistence passed');await page.close();}
 }finally{await browser.close();}})().catch(e=>{console.error(e);process.exit(1)});
+

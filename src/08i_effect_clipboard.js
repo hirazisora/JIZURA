@@ -57,13 +57,25 @@ J.readCutEffects=text=>{
   for(const key of ['inDur','outDur','stagger','scheme','transDur','motionScale','contentScale','bpm','beatOffset','seed'])if(d[key]!==undefined&&!Number.isFinite(d[key]))throw Error('invalid');
   return payload;
 };
+J.clearPastedLyricEffects = (project, line = null) => {
+  for (const [key, options] of Object.entries(project.lyricCutOptions || {})) {
+    const index=Number(key.split(':')[0]);
+    if (line !== null ? index !== line : project.overrides?.[index]?.lock) continue;
+    const details=options.details;
+    // Recognize projects saved before the explicit pasted-effects marker existed.
+    if (!options.pastedEffects && !details?.effectStyle && !details?.effectEvents && !(details?.fonts && details?.palette)) continue;
+    options.details=pick(details || {},['text','area']);
+    delete options.pastedEffects;
+    if (!Object.keys(options.details).length) delete options.details;
+  }
+};
 J.pasteCutEffects=(project,plan,layer,cut,payload)=>{
   if(payload.kind!==(layer==='lyrics'?'lyrics':'media'))throw Error('incompatible');
   if(layer==='lyrics'){
     const key=`${cut.line}:${cut.part}`,old=project.lyricCutOptions[key]||{};
     // Keep target text and display area while retaining the exact visual parameters.
     const preserved=pick(old.details||{},['text','area']);
-    project.lyricCutOptions[key]={...old,...clone(payload.native),details:{...clone(payload.details),...preserved}};
+    project.lyricCutOptions[key]={...old,...clone(payload.native),pastedEffects:true,details:{...clone(payload.details),...preserved}};
   }else{
     const old={...project[layer].overrides?.[cut.itemId],...project[layer].cutOverrides[cut.index]},details={...clone(payload.details)};
     details.effectSettings={...cut.effectSettings,...details.effectSettings};
