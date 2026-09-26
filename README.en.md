@@ -84,3 +84,7 @@ Enter `｜   ｜` (spaces between full-width vertical bars) to create a timed ly
 ### Retained lyrics without overlap
 
 Wrap lines in `{-` and `-}` to retain them like `{ … }` while avoiding overlap between their display areas. Adjust **Detailed → Techniques → Lyric overlap avoidance strength** from 0 (ordinary retained layering) to 1 (non-overlapping areas, default). Works with automatic placement off; positions are fixed for seeking. Areas shrink proportionally when necessary. Escape the braces (`\{` and `\}`) to display the delimiters literally.
+
+### Copy and paste cut effects
+
+Use the copy/paste icons in each cut's controls, timeline, or preview frame. Effects can be pasted between lyric cuts, or between foreground/background cuts. The destination's text, source asset, timing, and display area/placement are preserved. Layout geometry is rebuilt for the destination text. Pasting supports Undo/Redo. If clipboard access is unavailable, explicit copies can still be pasted within the same page.

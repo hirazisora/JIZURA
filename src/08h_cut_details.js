@@ -4,7 +4,7 @@
 'use strict';
 J.cutDetailKeys = {
   lyrics: ['text','layout','enter','hold','exit','inDur','outDur','stagger','decor','scheme','params','treat','treatP','bg','bgP','cam','camP','trans','transP','transDur','area','motionScale','contentScale'],
-  media: ['layout','hold','treat','trans','transP','transDur','effectSettings','bpm','beatOffset'],
+  media: ['enter','exit','independentPhases','layout','hold','treat','trans','transP','transDur','effectSettings','bpm','beatOffset'],
 };
 J.applyCutDetails = (cut, details, plan, layer) => {
   if (!details || typeof details !== 'object') return;
@@ -17,7 +17,7 @@ J.applyCutDetails = (cut, details, plan, layer) => {
   if (layer === 'lyrics') {
     const area = details.area || cut.area;
     for (const [key, param, registry] of [['layout','params',J.LAYOUTS],['treat','treatP',J.TREAT],['bg','bgP',J.BG],['cam','camP',J.CAMERA],['trans','transP',J.TRANS]]) {
-      const rebuildLayout = key === 'layout' && (details.area !== undefined || details.text !== undefined);
+      const rebuildLayout = key === 'layout' && (details.area !== undefined || details.text !== undefined || details.layout !== undefined && details.params === undefined);
       if (!rebuildLayout && (details[key] === undefined || details[key] === cut[key])) continue;
       const def = registry[details[key] ?? cut[key]], rng = J.rng(cut.seed);
       cut[param] = def?.plan ? (key === 'layout' ? def.plan(rng, {
