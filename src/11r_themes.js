@@ -3,6 +3,7 @@
 'use strict';
 const L = J.mediaLabel;
 const presets = {
+  horror: { category:'taste', name:L('ホラー','Horror'), moods:['horror'], styles:['hrRuin','hrNightRec','hrCurse'], media:['glitch','rackFocus','drift'], phases:['enter_blur','enter_glitch'], motion:[.35,.65], duration:[.3,.8], flash:false },
   pop: { category:'genre', name:L('ポップ','Pop'), moods:['pop'], styles:['magenta','caution','transit','rouge'], media:['pulse','swing','orbit','beatBounce','beatPulse'], phases:['pop','iris','enter_slide','enter_zoom'], motion:[.7,1.2], duration:[.2,.45], flash:true },
   ballad: { category:'genre', name:L('バラード','Ballad'), moods:['calm','emotional'], styles:['paper','specimen','noir'], media:['pushIn','pullOut','drift','rackFocus','beatBreathe'], phases:['enter_fade','enter_blur','curtain'], motion:[.25,.55], duration:[.65,1.2], flash:false },
   rock: { category:'genre', name:L('ロック','Rock'), moods:['glitch','emotional'], styles:['crimson','noir','mono'], media:['pulse','tumble','glitch','chromaticSplit','beatShake','beatTurn'], phases:['impact','whip','enter_glitch'], motion:[1,1.6], duration:[.12,.3], flash:true },
@@ -33,6 +34,7 @@ const rhythmByTheme = {
 };
 for (const [key, motions] of Object.entries(rhythmByTheme)) presets[key].media.push(...motions);
 const descriptions = {
+  horror:L('暗い配色・不穏な文字と映像','Dark colors and unsettling typography'),
   pop:L('明るい配色・弾む動き','Bright colors and bouncy motion'), ballad:L('落ち着いた配色・ゆっくりした余韻','Quiet colors and lingering motion'),
   rock:L('強いコントラスト・激しい動き','Strong contrast and energetic motion'), dance:L('鮮やかな配色・ビート同期','Vivid colors and beat-driven motion'),
   hiphop:L('太い文字・リズミカルな切り替え','Bold type and rhythmic cuts'), jazz:L('端正な文字・滑らかな動き','Refined type and smooth motion'),
@@ -46,7 +48,8 @@ J.themeIds = project => [...new Set((Array.isArray(project.themes) ? project.the
 const neutral = {layout:['center'],enter:['cut'],exit:['cut'],hold:['still'],decor:[],treat:['none'],bg:['none'],cam:['push'],fx:[],trans:[]};
 J.themeCandidates = (project,key) => {
   const theme = presets[key]; if (!theme) return null;
-  const allowed = (group,id) => !J.randomOk || J.randomOk(project,group,id);
+  const themedProject = key === 'horror' ? {...project,horror:true} : project;
+  const allowed = (group,id) => !J.randomOk || J.randomOk(themedProject,group,id);
   const lyrics = {};
   for (const group of J.GROUP_KEYS) {
     const wanted = new Set(neutral[group] || []);
@@ -65,7 +68,8 @@ J.omakase = (project,rnd=Math.random,choices={}) => {
   const pick = a=>a[Math.min(a.length-1,Math.floor(rnd()*a.length))];
   const key = pick(ids), theme = presets[key], pools = J.themeCandidates(project,key);
   const mood = pick(theme.moods), styles = pools.styles.filter(id=>id!==project.style);
-  const look = unrestricted(project,rnd,{mood,style:pick(styles.length ? styles : pools.styles)});
+  const themeProject = key === 'horror' ? {...project,horror:true} : project;
+  const look = unrestricted(themeProject,rnd,{mood,style:pick(styles.length ? styles : pools.styles)});
   // No out-of-theme "sprinkle" or random palette/font override.
   look.fonts = {}; look.colors = {...project.colors,enabled:false,accentOn:false};
   look.fx.flash = theme.flash && rnd()<.5;
@@ -90,6 +94,7 @@ J.omakase = (project,rnd=Math.random,choices={}) => {
     settings.motion = J.lerp(...theme.motion,rnd()); settings.duration = J.lerp(...theme.duration,rnd());
     look[layer] = {...project[layer],effects:settings};
   }
+  if (key === 'horror') look.horror = true;
   look.appliedTheme = key;
   return look;
 };
