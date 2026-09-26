@@ -87,7 +87,7 @@ class Renderer {
     const visible = cut => !opt.noLyrics && (opt.lyricLayer === 'above' ? cut.frontmost : opt.lyricLayer === 'below' ? !cut.frontmost : true);
     const activeCuts = at => J.lyricCutsAt(plan, at).filter(visible)
       .sort((a, b) => Number(!!a.frontmost) - Number(!!b.frontmost) || a.index - b.index).map(J.lyricRenderCut);
-    const sc = st.schemes[mainCut ? mainCut.scheme % st.schemes.length : 0] || st.schemes[0];
+    const sc = mainCut?.palette || st.schemes[mainCut ? mainCut.scheme % st.schemes.length : 0] || st.schemes[0];
     const allowFilter = this.filterOK && !opt.fast;
     // A frontmost transition needs the same backdrop for both its frames.
     let backdrop = null;
@@ -184,7 +184,7 @@ class Renderer {
       for (const P of contentPasses) {
         if (!P.cuts.has(cut.index)) continue;
         const tp = P.tp;
-        const csc = st.schemes[cut.scheme % st.schemes.length] || st.schemes[0];
+        const csc = cut.palette || st.schemes[cut.scheme % st.schemes.length] || st.schemes[0];
         const lt = tp - cut.start, motion = cut.motionScale ?? 1;
         const envOptions = {
           pass: P.pass, passColor: P.pass === 'A' ? csc.ghostA : P.pass === 'B' ? csc.ghostB : null,
@@ -227,7 +227,7 @@ class Renderer {
         }
       }
       if (target !== ctx) {
-        const cutScheme = st.schemes[cut.scheme % st.schemes.length] || st.schemes[0];
+        const cutScheme = cut.palette || st.schemes[cut.scheme % st.schemes.length] || st.schemes[0];
         if (backgroundMedia && !opt.noPost) {
           const layerOptions = { ...opt, transparent: true };
           this.post(target, plan, t, tq, step, cutScheme, scale, layerOptions, allowFilter);
@@ -246,7 +246,7 @@ class Renderer {
         const bx = B.getContext('2d'); bx.setTransform(1, 0, 0, 1, 0, 0); bx.globalCompositeOperation = 'copy'; bx.drawImage(ctx.canvas, 0, 0); bx.globalCompositeOperation = 'source-over';
         if (backdrop) { const ax = A.getContext('2d'); ax.setTransform(1, 0, 0, 1, 0, 0); ax.globalCompositeOperation = 'copy'; ax.drawImage(backdrop, 0, 0); ax.globalCompositeOperation = 'source-over'; }
         this.frame(A.getContext('2d'), plan, Math.max(prev.start, prev.end - 1e-3), Object.assign({}, opt, { noTrans: true, noPost: true, noHud: true }));
-        const psc = st.schemes[prev.scheme % st.schemes.length] || st.schemes[0];
+        const psc = prev.palette || st.schemes[prev.scheme % st.schemes.length] || st.schemes[0];
         ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over'; ctx.filter = 'none';
         try { J.TRANS[mainCut.trans].draw(ctx, A, B, J.clamp(lt / dur), { cw, ch, sc, scPrev: psc, st, P: mainCut.transP || {}, step, t, scale, allowFilter, seed: mainCut.seed | 0, tmp: (w, h) => this.ensure(this.transC || (this.transC = mk(2, 2)), w, h) }); }
         catch (e) { console.warn('trans', mainCut.trans, e); }
@@ -293,7 +293,7 @@ class Renderer {
   makeEnv(ctx, plan, cut, sc, o) {
     const area = cut && cut.area && !o.bgOnly && !o.fullFrame ? cut.area : null;
     const W = area ? plan.W * area.w : plan.W, H = area ? plan.H * area.h : plan.H;
-    const env = Object.assign({ ctx, W, H, sc, st: plan.style, fx: plan.fx, fps: plan.fps, cut, plan }, o);
+    const env = Object.assign({ ctx, W, H, sc: cut?.palette || sc, st: cut?.fonts ? {...plan.style,fonts:cut.fonts} : plan.style, fx: plan.fx, fps: plan.fps, cut, plan }, o);
     if (cut && cut.motionScale < 1) env.fx = Object.assign({}, plan.fx, { motion: plan.fx.motion * cut.motionScale });
     if (cut) {
       env.pIn = J.clamp(o.lt / Math.max(0.01, cut.inDur));

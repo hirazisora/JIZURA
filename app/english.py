@@ -357,6 +357,16 @@ def replace_copy(source, glossary):
 # Fork UI text is translated before the original glossary so short common
 # words such as 歌詞 and 追加 cannot split a longer fork label in half.
 FORK_BODY = {
+    '注釈レイアウトの小さな文字（対応している演出のみ）': 'Smaller text in annotation layouts (supported effects only)',
+    '歌詞入力補助': 'Lyric input tools',
+    '>重ねず1シーン</button>': '>Non-overlapping scene</button>',
+    '>1シーン</button>': '>One scene</button>',
+    '>空の歌詞</button>': '>Empty lyric</button>',
+    '>カット</button>': '>Cut</button>',
+    '>改行</button>': '>Line break</button>',
+    '>強調</button>': '>Emphasize</button>',
+    '>抑制</button>': '>Subdue</button>',
+
     '設定のみ書き出し': 'Export settings only',
     '設定のみ読み込み': 'Import settings only',
     "全角の縦線で囲んだ空白は、文字なし・演出のみの歌詞行になります": "Spaces between full-width vertical bars create a lyric line with effects only and no text",

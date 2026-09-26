@@ -2,12 +2,25 @@
 (() => {
 'use strict';
 const clone=v=>JSON.parse(JSON.stringify(v));
-const lyricKeys=['layout','enter','hold','exit','inDur','outDur','stagger','decor','scheme','treat','treatP','bg','bgP','cam','camP','trans','transP','transDur','motionScale','contentScale'];
+const lyricKeys=['layout','enter','hold','exit','inDur','outDur','stagger','decor','scheme','treat','treatP','bg','bgP','cam','camP','trans','transP','transDur','motionScale','contentScale','fonts','palette','fontParams'];
 const mediaKeys=['layout','enter','hold','exit','treat','trans','transP','transDur','effectSettings','bpm','beatOffset','independentPhases'];
 const pick=(value,keys)=>Object.fromEntries(keys.filter(k=>value[k]!==undefined).map(k=>[k,clone(value[k])]));
-J.cutEffectsPayload=(cut,layer)=>{
+J.cutFontParams = value => {
+  const result = [];
+  const visit = (node,path) => {
+    if (typeof node === 'string' && J.FONTS[node]) result.push({path,font:node});
+    else if (node && typeof node === 'object') for (const [key,child] of Object.entries(node)) visit(child,[...path,key]);
+  };
+  visit(value,[]); return result;
+};
+J.cutEffectsPayload=(cut,layer,plan)=>{
   const kind=layer==='lyrics'?'lyrics':'media';
   const details=pick(cut,kind==='lyrics'?lyricKeys:mediaKeys);
+  if(kind==='lyrics' && plan){
+    details.fonts=clone(cut.fonts || plan.style.fonts);
+    details.palette=clone(cut.palette || plan.style.schemes[cut.scheme % plan.style.schemes.length] || plan.style.schemes[0]);
+    details.fontParams=J.cutFontParams(cut.params);
+  }
   if(kind==='media' && details.effectSettings)details.effectSettings=pick(details.effectSettings,['motion','treatment','duration']);
   return {format:'jizura-cut-effects',version:1,kind,details,native:pick(cut,kind==='lyrics'?['blend','opacity','frontmost']:['technique','entrance','departure','chromaKey','chromaColor'])};
 };
@@ -22,6 +35,10 @@ J.readCutEffects=text=>{
   const d=payload.details,n=payload.native;
   if(!Object.keys(d).length)throw Error('invalid');
   if(data.kind==='lyrics'){
+    if(d.fonts!==undefined && (!d.fonts || typeof d.fonts!=='object' || Array.isArray(d.fonts) || Object.values(d.fonts).some(role=>!Array.isArray(role)||role.some(font=>typeof font!=='string'))))throw Error('invalid');
+    if(d.palette!==undefined && (!d.palette || typeof d.palette!=='object' || Array.isArray(d.palette) || Object.values(d.palette).some(color=>typeof color!=='string')))throw Error('invalid');
+    if(d.fontParams!==undefined && (!Array.isArray(d.fontParams) || d.fontParams.some(entry=>!entry || !Array.isArray(entry.path) || entry.path.some(key=>typeof key!=='string'||['__proto__','constructor','prototype'].includes(key)) || typeof entry.font!=='string')))throw Error('invalid');
+
     for(const key of ['layout','enter','hold','exit','treat','bg','cam','trans'])if(d[key]!=null&&!(key==='trans'&&d[key]==='none')&&!Object.hasOwn(J.registry(key),d[key]))throw Error('invalid');
     if(d.decor && (!Array.isArray(d.decor)||d.decor.some(x=>!x||!Object.hasOwn(J.DECOR,x.id))))throw Error('invalid');
     if(n.blend!==undefined&&!J.LYRIC_BLENDS.includes(n.blend))throw Error('invalid');

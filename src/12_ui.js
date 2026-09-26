@@ -514,7 +514,7 @@ async function effectClipboardAction(action,layer,index,part=0){
   const cut=getCut();if(!cut)return;
   const L=J.mediaLabel;
   if(action==='copy'){
-    const text=JSON.stringify(J.cutEffectsPayload(cut,layer));effectClipboard=text;
+    const text=JSON.stringify(J.cutEffectsPayload(cut,layer,S.plan));effectClipboard=text;
     try{await navigator.clipboard.writeText(text);localEffectClipboard=false;toast(L('演出をクリップボードにコピーしました','Effects copied to clipboard'));}
     catch(e){localEffectClipboard=true;toast(L('演出をコピーしました（このページ内で貼り付け可能）','Effects copied (paste within this page)'));}
     return;
@@ -2249,6 +2249,22 @@ function bind() {
   });
   $('mediaBlend').addEventListener('change', e => { S.project.foreground.blend = e.target.value; replan(); });
   $('mediaOpacity').addEventListener('change', e => { S.project.foreground.opacity = J.clamp(+e.target.value || 0, 0, 100); replan(); });
+  $('lyricInputTools').addEventListener('click', e => {
+    const button=e.target.closest('[data-lyric-insert]'); if (!button) return;
+    const input=$('lyrics'), start=input.selectionStart, end=input.selectionEnd;
+    const selected=input.value.slice(start,end), kind=button.dataset.lyricInsert;
+    const pairs={cut:['/','/'],break:['\\n','\\n'],strong:['*','*'],soft:['~','~'],scene:['{','}'],separate:['{-','-}'],empty:['｜','｜']};
+    let [before,after]=pairs[kind], middle=selected;
+    if (kind==='empty' && !selected) middle='　　　　';
+    if (kind==='cut' || kind==='break') { if (!selected) after=''; }
+    if (kind==='scene' || kind==='separate') {
+      before=(start && input.value[start-1]!=='\n'?'\n':'')+before+'\n';
+      after='\n'+after+(end<input.value.length && input.value[end]!=='\n'?'\n':'');
+    }
+    input.setRangeText(before+middle+after,start,end,'end');
+    input.focus(); input.setSelectionRange(start+before.length,start+before.length+middle.length);
+    input.dispatchEvent(new Event('input',{bubbles:true}));
+  });
   $('lyrics').addEventListener('input', e => {
     const changedCount = reconcileLyricLines(S.project.lyrics, e.target.value);
     S.project.lyrics = e.target.value;

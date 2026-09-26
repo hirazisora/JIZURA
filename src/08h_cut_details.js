@@ -3,7 +3,7 @@
 (() => {
 'use strict';
 J.cutDetailKeys = {
-  lyrics: ['text','layout','enter','hold','exit','inDur','outDur','stagger','decor','scheme','params','treat','treatP','bg','bgP','cam','camP','trans','transP','transDur','area','motionScale','contentScale'],
+  lyrics: ['text','layout','enter','hold','exit','inDur','outDur','stagger','decor','scheme','params','treat','treatP','bg','bgP','cam','camP','trans','transP','transDur','area','motionScale','contentScale','fonts','palette','fontParams'],
   media: ['enter','exit','independentPhases','layout','hold','treat','trans','transP','transDur','effectSettings','bpm','beatOffset'],
 };
 J.applyCutDetails = (cut, details, plan, layer) => {
@@ -15,6 +15,7 @@ J.applyCutDetails = (cut, details, plan, layer) => {
     cut.transP=def?.plan ? def.plan(J.rng(cut.seed),plan.style) : {};
   }
   if (layer === 'lyrics') {
+    const cutStyle = details.fonts ? {...plan.style,fonts:details.fonts} : plan.style;
     const area = details.area || cut.area;
     for (const [key, param, registry] of [['layout','params',J.LAYOUTS],['treat','treatP',J.TREAT],['bg','bgP',J.BG],['cam','camP',J.CAMERA],['trans','transP',J.TRANS]]) {
       const rebuildLayout = key === 'layout' && (details.area !== undefined || details.text !== undefined || details.layout !== undefined && details.params === undefined);
@@ -23,11 +24,20 @@ J.applyCutDetails = (cut, details, plan, layer) => {
       cut[param] = def?.plan ? (key === 'layout' ? def.plan(rng, {
         text: details.text ?? cut.text, n: [...(details.text ?? cut.text).replace(/\s/g,'')].length,
         W: plan.W * (area?.w ?? 1), H: plan.H * (area?.h ?? 1), dur: cut.dur,
-      }, plan.style) : def.plan(rng, plan.style)) : {};
+      }, cutStyle) : def.plan(rng, cutStyle)) : {};
     }
   }
   for (const key of J.cutDetailKeys[layer === 'lyrics' ? 'lyrics' : 'media']) {
     if (Object.prototype.hasOwnProperty.call(details,key)) cut[key] = copy(details[key]);
+  }
+  if (layer === 'lyrics' && Array.isArray(details.fontParams)) {
+    for (const entry of details.fontParams) {
+      if (!Array.isArray(entry.path) || !J.FONTS[entry.font] || entry.path.some(k=>['__proto__','constructor','prototype'].includes(k))) continue;
+      let parent=cut.params;
+      for (const key of entry.path.slice(0,-1)) parent=parent?.[key];
+      const key=entry.path.at(-1);
+      if (parent && Object.hasOwn(parent,key) && typeof parent[key]==='string') parent[key]=entry.font;
+    }
   }
   if (cut.trans === 'none') cut.trans = null;
   if (layer === 'lyrics' && details.area) cut.areaMode = 'manual';

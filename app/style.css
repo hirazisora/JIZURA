@@ -481,3 +481,6 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
 .item-frame-action[data-action="remove"] { color:#ff7180; }
 .item-frame-action:hover:not(:disabled),.item-frame-action:focus-visible { background:#51525b; }
 .item-frame-action:disabled { cursor:default; opacity:.4; }
+
+.lyric-input-tools { display:flex; flex-wrap:wrap; gap:5px; margin-top:7px; }
+.lyric-input-tools button { font-size:11px; padding:4px 7px; }

@@ -500,6 +500,9 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
 .item-frame-action:hover:not(:disabled),.item-frame-action:focus-visible { background:#51525b; }
 .item-frame-action:disabled { cursor:default; opacity:.4; }
 
+.lyric-input-tools { display:flex; flex-wrap:wrap; gap:5px; margin-top:7px; }
+.lyric-input-tools button { font-size:11px; padding:4px 7px; }
+
 </style>
 </head>
 <body>
@@ -544,6 +547,9 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
       <div class="sec" id="lyricsPane">
         <div class="sec-h"><h2>Lyrics</h2><button id="btnSyntax" class="ghost small" aria-expanded="false">Syntax</button></div>
         <textarea id="lyrics" rows="9" spellcheck="false" aria-label="Lyrics (one phrase per line)"></textarea>
+        <div id="lyricInputTools" class="lyric-input-tools" role="group" aria-label="Lyric input tools">
+          <button type="button" data-lyric-insert="cut">Cut</button><button type="button" data-lyric-insert="break">Line break</button><button type="button" data-lyric-insert="strong">Emphasize</button><button type="button" data-lyric-insert="soft">Subdue</button><button type="button" data-lyric-insert="scene">One scene</button><button type="button" data-lyric-insert="separate">Non-overlapping scene</button><button type="button" data-lyric-insert="empty">Empty lyric</button>
+        </div>
         <label class="lang-row">Lyrics language<select id="lyricLang"><option value="auto">Auto-detect</option><option value="ja">日本語</option><option value="zh-Hant">繁體中文</option><option value="zh-Hans">简体中文</option><option value="ko">한국어</option></select><span id="langNote" class="muted"></span></label>
         <div id="syntax" class="syntax" hidden>
           <ul>
@@ -556,7 +562,7 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
             <li><code>*emphasis*</code> … a larger automatic area, displayed above the foreground without avoiding it.</li>
             <li><code>~whisper~</code> … a smaller display with gentler motion.</li>
             <li>A trailing <code>!</code> … adds a flash and shake</li>
-            <li><code>lyrics|reading or note</code> … smaller text in annotation layouts</li>
+            <li><code>lyrics|reading or note</code> … Smaller text in annotation layouts (supported effects only)</li>
             <li><code>[01:23.45]Lyrics</code> … uses an LRC timestamp</li>
             <li><code>#</code> starts a comment (ignored)</li>
             <li>Place <code>\</code> before a control character to display it literally: <code>\*</code>, <code>\~</code>, <code>\{</code>, <code>\}</code>, <code>\/</code>, <code>\|</code>, <code>\!</code>, <code>\#</code>, <code>\[</code>, <code>\\</code>.</li>
@@ -1203,6 +1209,8 @@ J.fontsOfPlan = (plan) => {
   const set = new Set(['mono']);
   if (!plan) return [...set];
   for (const r of Object.values(plan.style.fonts || {})) for (const k of r) set.add(k);
+  for (const c of plan.cuts || []) for (const entry of c.fontParams || []) set.add(entry.font);
+  for (const c of plan.cuts || []) for (const role of Object.values(c.fonts || {})) for (const key of role) set.add(key);
   for (const c of plan.cuts || []) for (const v of Object.values(c.params || {})) {
     if (typeof v === 'string' && J.FONTS[v]) set.add(v);
     else if (Array.isArray(v)) v.forEach(x => { if (typeof x === 'string' && J.FONTS[x]) set.add(x); });
@@ -5442,7 +5450,7 @@ J.mediaBeatState=(cut,p,w,h)=>{
 (() => {
 'use strict';
 J.cutDetailKeys = {
-  lyrics: ['text','layout','enter','hold','exit','inDur','outDur','stagger','decor','scheme','params','treat','treatP','bg','bgP','cam','camP','trans','transP','transDur','area','motionScale','contentScale'],
+  lyrics: ['text','layout','enter','hold','exit','inDur','outDur','stagger','decor','scheme','params','treat','treatP','bg','bgP','cam','camP','trans','transP','transDur','area','motionScale','contentScale','fonts','palette','fontParams'],
   media: ['enter','exit','independentPhases','layout','hold','treat','trans','transP','transDur','effectSettings','bpm','beatOffset'],
 };
 J.applyCutDetails = (cut, details, plan, layer) => {
@@ -5454,6 +5462,7 @@ J.applyCutDetails = (cut, details, plan, layer) => {
     cut.transP=def?.plan ? def.plan(J.rng(cut.seed),plan.style) : {};
   }
   if (layer === 'lyrics') {
+    const cutStyle = details.fonts ? {...plan.style,fonts:details.fonts} : plan.style;
     const area = details.area || cut.area;
     for (const [key, param, registry] of [['layout','params',J.LAYOUTS],['treat','treatP',J.TREAT],['bg','bgP',J.BG],['cam','camP',J.CAMERA],['trans','transP',J.TRANS]]) {
       const rebuildLayout = key === 'layout' && (details.area !== undefined || details.text !== undefined || details.layout !== undefined && details.params === undefined);
@@ -5462,11 +5471,20 @@ J.applyCutDetails = (cut, details, plan, layer) => {
       cut[param] = def?.plan ? (key === 'layout' ? def.plan(rng, {
         text: details.text ?? cut.text, n: [...(details.text ?? cut.text).replace(/\s/g,'')].length,
         W: plan.W * (area?.w ?? 1), H: plan.H * (area?.h ?? 1), dur: cut.dur,
-      }, plan.style) : def.plan(rng, plan.style)) : {};
+      }, cutStyle) : def.plan(rng, cutStyle)) : {};
     }
   }
   for (const key of J.cutDetailKeys[layer === 'lyrics' ? 'lyrics' : 'media']) {
     if (Object.prototype.hasOwnProperty.call(details,key)) cut[key] = copy(details[key]);
+  }
+  if (layer === 'lyrics' && Array.isArray(details.fontParams)) {
+    for (const entry of details.fontParams) {
+      if (!Array.isArray(entry.path) || !J.FONTS[entry.font] || entry.path.some(k=>['__proto__','constructor','prototype'].includes(k))) continue;
+      let parent=cut.params;
+      for (const key of entry.path.slice(0,-1)) parent=parent?.[key];
+      const key=entry.path.at(-1);
+      if (parent && Object.hasOwn(parent,key) && typeof parent[key]==='string') parent[key]=entry.font;
+    }
   }
   if (cut.trans === 'none') cut.trans = null;
   if (layer === 'lyrics' && details.area) cut.areaMode = 'manual';
@@ -5500,12 +5518,25 @@ J.planMedia = function(project, plan, audioDuration, layer='media') {
 (() => {
 'use strict';
 const clone=v=>JSON.parse(JSON.stringify(v));
-const lyricKeys=['layout','enter','hold','exit','inDur','outDur','stagger','decor','scheme','treat','treatP','bg','bgP','cam','camP','trans','transP','transDur','motionScale','contentScale'];
+const lyricKeys=['layout','enter','hold','exit','inDur','outDur','stagger','decor','scheme','treat','treatP','bg','bgP','cam','camP','trans','transP','transDur','motionScale','contentScale','fonts','palette','fontParams'];
 const mediaKeys=['layout','enter','hold','exit','treat','trans','transP','transDur','effectSettings','bpm','beatOffset','independentPhases'];
 const pick=(value,keys)=>Object.fromEntries(keys.filter(k=>value[k]!==undefined).map(k=>[k,clone(value[k])]));
-J.cutEffectsPayload=(cut,layer)=>{
+J.cutFontParams = value => {
+  const result = [];
+  const visit = (node,path) => {
+    if (typeof node === 'string' && J.FONTS[node]) result.push({path,font:node});
+    else if (node && typeof node === 'object') for (const [key,child] of Object.entries(node)) visit(child,[...path,key]);
+  };
+  visit(value,[]); return result;
+};
+J.cutEffectsPayload=(cut,layer,plan)=>{
   const kind=layer==='lyrics'?'lyrics':'media';
   const details=pick(cut,kind==='lyrics'?lyricKeys:mediaKeys);
+  if(kind==='lyrics' && plan){
+    details.fonts=clone(cut.fonts || plan.style.fonts);
+    details.palette=clone(cut.palette || plan.style.schemes[cut.scheme % plan.style.schemes.length] || plan.style.schemes[0]);
+    details.fontParams=J.cutFontParams(cut.params);
+  }
   if(kind==='media' && details.effectSettings)details.effectSettings=pick(details.effectSettings,['motion','treatment','duration']);
   return {format:'jizura-cut-effects',version:1,kind,details,native:pick(cut,kind==='lyrics'?['blend','opacity','frontmost']:['technique','entrance','departure','chromaKey','chromaColor'])};
 };
@@ -5520,6 +5551,10 @@ J.readCutEffects=text=>{
   const d=payload.details,n=payload.native;
   if(!Object.keys(d).length)throw Error('invalid');
   if(data.kind==='lyrics'){
+    if(d.fonts!==undefined && (!d.fonts || typeof d.fonts!=='object' || Array.isArray(d.fonts) || Object.values(d.fonts).some(role=>!Array.isArray(role)||role.some(font=>typeof font!=='string'))))throw Error('invalid');
+    if(d.palette!==undefined && (!d.palette || typeof d.palette!=='object' || Array.isArray(d.palette) || Object.values(d.palette).some(color=>typeof color!=='string')))throw Error('invalid');
+    if(d.fontParams!==undefined && (!Array.isArray(d.fontParams) || d.fontParams.some(entry=>!entry || !Array.isArray(entry.path) || entry.path.some(key=>typeof key!=='string'||['__proto__','constructor','prototype'].includes(key)) || typeof entry.font!=='string')))throw Error('invalid');
+
     for(const key of ['layout','enter','hold','exit','treat','bg','cam','trans'])if(d[key]!=null&&!(key==='trans'&&d[key]==='none')&&!Object.hasOwn(J.registry(key),d[key]))throw Error('invalid');
     if(d.decor && (!Array.isArray(d.decor)||d.decor.some(x=>!x||!Object.hasOwn(J.DECOR,x.id))))throw Error('invalid');
     if(n.blend!==undefined&&!J.LYRIC_BLENDS.includes(n.blend))throw Error('invalid');
@@ -5642,7 +5677,7 @@ class Renderer {
     const visible = cut => !opt.noLyrics && (opt.lyricLayer === 'above' ? cut.frontmost : opt.lyricLayer === 'below' ? !cut.frontmost : true);
     const activeCuts = at => J.lyricCutsAt(plan, at).filter(visible)
       .sort((a, b) => Number(!!a.frontmost) - Number(!!b.frontmost) || a.index - b.index).map(J.lyricRenderCut);
-    const sc = st.schemes[mainCut ? mainCut.scheme % st.schemes.length : 0] || st.schemes[0];
+    const sc = mainCut?.palette || st.schemes[mainCut ? mainCut.scheme % st.schemes.length : 0] || st.schemes[0];
     const allowFilter = this.filterOK && !opt.fast;
     // A frontmost transition needs the same backdrop for both its frames.
     let backdrop = null;
@@ -5739,7 +5774,7 @@ class Renderer {
       for (const P of contentPasses) {
         if (!P.cuts.has(cut.index)) continue;
         const tp = P.tp;
-        const csc = st.schemes[cut.scheme % st.schemes.length] || st.schemes[0];
+        const csc = cut.palette || st.schemes[cut.scheme % st.schemes.length] || st.schemes[0];
         const lt = tp - cut.start, motion = cut.motionScale ?? 1;
         const envOptions = {
           pass: P.pass, passColor: P.pass === 'A' ? csc.ghostA : P.pass === 'B' ? csc.ghostB : null,
@@ -5782,7 +5817,7 @@ class Renderer {
         }
       }
       if (target !== ctx) {
-        const cutScheme = st.schemes[cut.scheme % st.schemes.length] || st.schemes[0];
+        const cutScheme = cut.palette || st.schemes[cut.scheme % st.schemes.length] || st.schemes[0];
         if (backgroundMedia && !opt.noPost) {
           const layerOptions = { ...opt, transparent: true };
           this.post(target, plan, t, tq, step, cutScheme, scale, layerOptions, allowFilter);
@@ -5801,7 +5836,7 @@ class Renderer {
         const bx = B.getContext('2d'); bx.setTransform(1, 0, 0, 1, 0, 0); bx.globalCompositeOperation = 'copy'; bx.drawImage(ctx.canvas, 0, 0); bx.globalCompositeOperation = 'source-over';
         if (backdrop) { const ax = A.getContext('2d'); ax.setTransform(1, 0, 0, 1, 0, 0); ax.globalCompositeOperation = 'copy'; ax.drawImage(backdrop, 0, 0); ax.globalCompositeOperation = 'source-over'; }
         this.frame(A.getContext('2d'), plan, Math.max(prev.start, prev.end - 1e-3), Object.assign({}, opt, { noTrans: true, noPost: true, noHud: true }));
-        const psc = st.schemes[prev.scheme % st.schemes.length] || st.schemes[0];
+        const psc = prev.palette || st.schemes[prev.scheme % st.schemes.length] || st.schemes[0];
         ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over'; ctx.filter = 'none';
         try { J.TRANS[mainCut.trans].draw(ctx, A, B, J.clamp(lt / dur), { cw, ch, sc, scPrev: psc, st, P: mainCut.transP || {}, step, t, scale, allowFilter, seed: mainCut.seed | 0, tmp: (w, h) => this.ensure(this.transC || (this.transC = mk(2, 2)), w, h) }); }
         catch (e) { console.warn('trans', mainCut.trans, e); }
@@ -5848,7 +5883,7 @@ class Renderer {
   makeEnv(ctx, plan, cut, sc, o) {
     const area = cut && cut.area && !o.bgOnly && !o.fullFrame ? cut.area : null;
     const W = area ? plan.W * area.w : plan.W, H = area ? plan.H * area.h : plan.H;
-    const env = Object.assign({ ctx, W, H, sc, st: plan.style, fx: plan.fx, fps: plan.fps, cut, plan }, o);
+    const env = Object.assign({ ctx, W, H, sc: cut?.palette || sc, st: cut?.fonts ? {...plan.style,fonts:cut.fonts} : plan.style, fx: plan.fx, fps: plan.fps, cut, plan }, o);
     if (cut && cut.motionScale < 1) env.fx = Object.assign({}, plan.fx, { motion: plan.fx.motion * cut.motionScale });
     if (cut) {
       env.pIn = J.clamp(o.lt / Math.max(0.01, cut.inDur));
@@ -37475,7 +37510,7 @@ async function effectClipboardAction(action,layer,index,part=0){
   const cut=getCut();if(!cut)return;
   const L=J.mediaLabel;
   if(action==='copy'){
-    const text=JSON.stringify(J.cutEffectsPayload(cut,layer));effectClipboard=text;
+    const text=JSON.stringify(J.cutEffectsPayload(cut,layer,S.plan));effectClipboard=text;
     try{await navigator.clipboard.writeText(text);localEffectClipboard=false;toast(L('Effectsをクリップボードにコピーしました','Effects copied to clipboard'));}
     catch(e){localEffectClipboard=true;toast(L('Effectsをコピーしました（このページ内で貼り付け可能）','Effects copied (paste within this page)'));}
     return;
@@ -39210,6 +39245,22 @@ function bind() {
   });
   $('mediaBlend').addEventListener('change', e => { S.project.foreground.blend = e.target.value; replan(); });
   $('mediaOpacity').addEventListener('change', e => { S.project.foreground.opacity = J.clamp(+e.target.value || 0, 0, 100); replan(); });
+  $('lyricInputTools').addEventListener('click', e => {
+    const button=e.target.closest('[data-lyric-insert]'); if (!button) return;
+    const input=$('lyrics'), start=input.selectionStart, end=input.selectionEnd;
+    const selected=input.value.slice(start,end), kind=button.dataset.lyricInsert;
+    const pairs={cut:['/','/'],break:['\\n','\\n'],strong:['*','*'],soft:['~','~'],scene:['{','}'],separate:['{-','-}'],empty:['｜','｜']};
+    let [before,after]=pairs[kind], middle=selected;
+    if (kind==='empty' && !selected) middle='　　　　';
+    if (kind==='cut' || kind==='break') { if (!selected) after=''; }
+    if (kind==='scene' || kind==='separate') {
+      before=(start && input.value[start-1]!=='\n'?'\n':'')+before+'\n';
+      after='\n'+after+(end<input.value.length && input.value[end]!=='\n'?'\n':'');
+    }
+    input.setRangeText(before+middle+after,start,end,'end');
+    input.focus(); input.setSelectionRange(start+before.length,start+before.length+middle.length);
+    input.dispatchEvent(new Event('input',{bubbles:true}));
+  });
   $('lyrics').addEventListener('input', e => {
     const changedCount = reconcileLyricLines(S.project.lyrics, e.target.value);
     S.project.lyrics = e.target.value;
