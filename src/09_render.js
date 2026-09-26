@@ -65,14 +65,7 @@ class Renderer {
       this.frame(ctx, plan, t, Object.assign({}, opt, { noForeground: true, lyricLayer: 'below' }));
       const layer = this.ensure(this.foregroundLayer || (this.foregroundLayer = document.createElement('canvas')), cw, ch);
       const lx = layer.getContext('2d'); lx.setTransform(1, 0, 0, 1, 0, 0); lx.globalAlpha = 1; lx.globalCompositeOperation = 'source-over'; lx.filter = 'none'; lx.clearRect(0, 0, cw, ch);
-      J.drawMedia(lx, plan, t, this, 'foreground', !!opt.previewEdit);
-      const previousForeground = foregroundCut.index > 0 && plan.foreground.cuts[foregroundCut.index - 1];
-      if (!opt.previewEdit && foregroundCut.chromaKey && foregroundCut.trans && previousForeground && J.mediaAssets.has(previousForeground.itemId) && Math.abs(previousForeground.end - foregroundCut.start) < 0.06 && t - foregroundCut.start < foregroundCut.transDur) {
-        const mask = this.ensure(this.foregroundKeyMask || (this.foregroundKeyMask = document.createElement('canvas')), cw, ch);
-        const mx = mask.getContext('2d'); mx.setTransform(1, 0, 0, 1, 0, 0); mx.globalAlpha = 1; mx.globalCompositeOperation = 'source-over'; mx.filter = 'none'; mx.clearRect(0, 0, cw, ch);
-        J.drawMediaCut(mx, foregroundCut, t, { noEnter: true, noExit: true, previewEdit: !!opt.previewEdit });
-        lx.globalCompositeOperation = 'destination-in'; lx.drawImage(mask, 0, 0); lx.globalCompositeOperation = 'source-over';
-      }
+      J.drawForegroundLayer(lx, plan, t, this, !!opt.previewEdit);
       ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = plan.foreground.opacity / 100;
       ctx.globalCompositeOperation = { normal: 'source-over', multiply: 'multiply', screen: 'screen' }[plan.foreground.blend] || 'source-over';
       ctx.drawImage(layer, 0, 0); ctx.restore();
@@ -84,7 +77,7 @@ class Renderer {
       return;
     }
     const mediaCut = !opt.noMedia && !opt.transparent && plan.media && J.mediaAt(plan, t);
-    const backgroundMedia = mediaCut && J.mediaAssets.has(mediaCut.itemId);
+    const backgroundMedia = J.mediaSourceAvailable(mediaCut);
     const fx = plan.fx, st = plan.style, fps = plan.fps;
     // motion is quantised to 'koma' drawings per second (24fps timebase); random flicker runs on a <=24Hz clock
     const stepDur = J.stepDur(fx, fps);
@@ -109,7 +102,7 @@ class Renderer {
     if (!opt.preserveCanvas) ctx.clearRect(0, 0, cw, ch);
     ctx.setTransform(scale, 0, 0, scale, 0, 0);
     // ---------- background ----------
-    const key = plan.keyBg && J.KEY_BG && J.KEY_BG[plan.keyBg] ? plan.keyBg : null;   // 合成用: white-on-black, finished in keyFinish()
+    const key = !opt.copyLyrics && plan.keyBg && J.KEY_BG && J.KEY_BG[plan.keyBg] ? plan.keyBg : null;   // 合成用: white-on-black, finished in keyFinish()
     if (backgroundMedia) {
       ctx.fillStyle = st.schemes[0].bg; ctx.fillRect(0, 0, W, H);
       ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -155,7 +148,7 @@ class Renderer {
     const beatInfo = plan.beats && plan.beats.length ? beatAt(plan.beats, tq) : null;
     const energy = plan.energy ? plan.energy[Math.min(plan.energy.length - 1, Math.max(0, Math.floor(t * plan.energyRate)))] : null;
     // ---------- background graphic (per line) ----------
-    if (plan.media?.applyLyricBackground !== false && !opt.transparent && !key && mainCut && mainCut.bg && mainCut.bg !== 'none' && J.BG[mainCut.bg]) {
+    if ((opt.copyLyrics || plan.media?.applyLyricBackground !== false && !opt.transparent) && !key && mainCut && mainCut.bg && mainCut.bg !== 'none' && J.BG[mainCut.bg]) {
       const env = this.makeEnv(ctx, plan, mainCut, sc, { pass: 'main', t: tq, lt: tq - mainCut.start, ltb: tq - mainCut.start, step, scale, allowFilter, energy, beat: beatInfo, bgOnly: true });
       ctx.save();
       try { J.BG[mainCut.bg].draw(env, mainCut.bgP || {}); } catch (e) { console.warn('bg', mainCut.bg, e); }

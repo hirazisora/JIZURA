@@ -4266,6 +4266,41 @@ J.normalizeMedia = m => {
   o.opacity = J.clamp(+o.opacity || 0, 0, 100);
   return o;
 };
+// Virtual sources refer to the current frame; no duplicated files or recursive background reads.
+J.mediaCopyItems = (layer='media') => layer !== 'media' ? [] : [
+  {id:'@copy:foreground-source',type:'copy',name:J.mediaLabel('前景をコピー（素材のみ）','Copy foreground (source only)')},
+  {id:'@copy:foreground-render',type:'copy',name:J.mediaLabel('前景をコピー（演出含む）','Copy foreground (with effects)')},
+  {id:'@copy:lyrics',type:'copy',name:J.mediaLabel('歌詞のコピー','Copy lyrics')},
+];
+J.isMediaCopy = id => ['@copy:foreground-source','@copy:foreground-render','@copy:lyrics'].includes(id);
+J.mediaSourceAvailable = cut => !!cut && (J.isMediaCopy(cut.itemId) || J.mediaAssets.has(cut.itemId));
+J.mediaSourceDimensions = (plan,cut,t=0) => {
+  if(!cut)return null;
+  if(J.isMediaCopy(cut.itemId) && cut.itemId!=='@copy:foreground-source')return {width:plan.W,height:plan.H};
+  if(cut.itemId==='@copy:foreground-source')cut=J.mediaAt(plan,t,'foreground');
+  const source=cut&&J.mediaAssets.get(cut.itemId)?.element;
+  const width=source&&(source.videoWidth||source.naturalWidth||source.width),height=source&&(source.videoHeight||source.naturalHeight||source.height);
+  return width&&height?{width,height}:null;
+};
+J.mediaCopySource = (plan,cut,t,owner,w,h) => {
+  if(!J.isMediaCopy(cut.itemId))return null;
+  if(cut.itemId==='@copy:foreground-source') {
+    const foreground=J.mediaAt(plan,t,'foreground');
+    return foreground&&J.mediaAssets.get(foreground.itemId)?.element || null;
+  }
+  const renderer=owner.copyRenderer || (owner.copyRenderer=new J.Renderer());
+  const canvas=owner.copySourceCanvas || (owner.copySourceCanvas=document.createElement('canvas'));
+  if(canvas.width!==w)canvas.width=w;if(canvas.height!==h)canvas.height=h;
+  const ctx=canvas.getContext('2d');ctx.setTransform(1,0,0,1,0,0);ctx.globalAlpha=1;ctx.globalCompositeOperation='source-over';ctx.filter='none';ctx.clearRect(0,0,w,h);
+  if(cut.itemId==='@copy:lyrics') {
+    if(J.lyricCutsAt(plan,t).length)renderer.frame(ctx,plan,t,{scale:w/plan.W,noMedia:true,noForeground:true,transparent:true,noHud:true,copyLyrics:true});
+  } else {
+    J.drawForegroundLayer(ctx,plan,t,renderer);
+    // Foreground opacity belongs to the copied result, before background effects.
+    ctx.save();ctx.globalCompositeOperation='destination-in';ctx.globalAlpha=(plan.foreground?.opacity??100)/100;ctx.fillStyle='#fff';ctx.fillRect(0,0,w,h);ctx.restore();
+  }
+  return canvas;
+};
 J.mediaOrder = (project, layer = 'media') => {
   const m = J.normalizeMedia(project[layer]), order = m.items.slice();
   if (m.randomOrder && order.length > 1) {
@@ -4279,16 +4314,18 @@ J.planMedia = (project, lyricPlan, audioDuration, layer = 'media') => {
   const fixedDuration = Number.isFinite(+project.durationOverride) && +project.durationOverride > 0 ? +project.durationOverride : null;
   const count = m.manualCuts ? m.cutCount : items.length ? (m.loop ? (m.cutCount || Math.min(1000, items.length * 2)) : items.length) : 0;
   const order = J.mediaOrder(project, layer);
+  const findItem = id => items.find(item=>item.id===id) || J.mediaCopyItems(layer).find(item=>item.id===id);
   const baseItems = Array.from({ length: count }, (_, i) => {
     const assigned = m.cutOverrides[i];
-    if (assigned && Object.hasOwn(assigned, 'itemId')) return items.find(item => item.id === assigned.itemId) || null;
+    if (assigned && Object.hasOwn(assigned, 'itemId')) return findItem(assigned.itemId) || null;
     return items.length ? items[i % items.length] : null;
   });
   let randomIndex = 0;
   const displayItems = baseItems.map((item, i) => {
     if (!item) return null; // Explicit blank cuts never consume a shuffled slot.
     const ov = Object.assign({}, m.overrides[item.id] || {}, m.cutOverrides[i] || {});
-    if (ov.lock) return items.find(x => x.id === (ov.lockedItemId || item.id)) || null;
+    if (ov.lock) return findItem(ov.lockedItemId || item.id) || null;
+    if (item.type === 'copy') return item;
     return m.randomOrder && order.length ? order[randomIndex++ % order.length] : item;
   });
   const itemAt = i => displayItems[i];
@@ -4351,7 +4388,7 @@ J.planMedia = (project, lyricPlan, audioDuration, layer = 'media') => {
       cut.placement = J.normalizeMediaPlacement(ov.lockedPlacement);
       cut.placementMode = ov.lockedPlacementMode || (cut.placement ? 'auto' : 'default');
     } else if (cut.technique && !['none', 'legacy'].includes(cut.technique) && cut.effectSettings?.autoPlacement !== false) {
-      cut.placement = J.autoMediaPlacement(project, cut, items.find(item => item.id === cut.itemId), lyricPlan, layer);
+      cut.placement = J.autoMediaPlacement(project, cut, (findItem(cut.itemId)?.type==='copy'?{...findItem(cut.itemId),width:lyricPlan.W,height:lyricPlan.H}:findItem(cut.itemId)), lyricPlan, layer);
       cut.placementMode = 'auto';
     }
   }
@@ -4520,7 +4557,7 @@ J.chromaSource = (src, cut, w, h) => {
   x.putImageData(pixels, 0, 0); return c;
 };
 J.drawMediaCut = (ctx, cut, t, options = {}) => {
-  const asset = J.mediaAssets.get(cut.itemId); if (!asset) return false;
+  const asset = J.mediaAssets.get(cut.itemId); if (!asset && !options.source) return false;
   const src = options.source || asset.element, sw = src.videoWidth || src.naturalWidth || src.width, sh = src.videoHeight || src.naturalHeight || src.height;
   if (!sw || !sh) return false;
   const w = ctx.canvas.width, h = ctx.canvas.height, d = Math.max(0.04, cut.end - cut.start), p = J.clamp((t - cut.start) / d, 0, 1);
@@ -4562,11 +4599,13 @@ J.drawMediaCut = (ctx, cut, t, options = {}) => {
   return true;
 };
 J.drawMedia = (ctx, plan, t, owner, layer = 'media', previewEdit = false) => {
-  const cut = J.mediaAt(plan, t, layer); if (!cut || !J.mediaAssets.has(cut.itemId)) return false;
+  const cut = J.mediaAt(plan, t, layer); if (!J.mediaSourceAvailable(cut)) return false;
+  owner ||= {};
+  const sourceFor = c => J.isMediaCopy(c.itemId) ? J.mediaCopySource(plan,c,t,owner,ctx.canvas.width,ctx.canvas.height) : null;
   const prev = cut.index > 0 ? plan[layer].cuts[cut.index - 1] : null;
   const next = plan[layer].cuts[cut.index + 1];
-  const active = !previewEdit && prev && cut.trans && t - cut.start < cut.transDur && Math.abs(prev.end - cut.start) < 0.06 && J.mediaAssets.has(prev.itemId);
-  if (!active) return J.drawMediaCut(ctx, cut, t, { noEnter: !cut.independentPhases && !!cut.trans, noExit: !cut.independentPhases && !!(next && next.trans && Math.abs(next.start - cut.end) < 0.06), previewEdit });
+  const active = !previewEdit && prev && cut.trans && t - cut.start < cut.transDur && Math.abs(prev.end - cut.start) < 0.06 && J.mediaSourceAvailable(prev);
+  if (!active) return J.drawMediaCut(ctx, cut, t, { noEnter: !cut.independentPhases && !!cut.trans, noExit: !cut.independentPhases && !!(next && next.trans && Math.abs(next.start - cut.end) < 0.06), previewEdit, source:sourceFor(cut) });
   const w = ctx.canvas.width, h = ctx.canvas.height;
   const canvas = key => {
     const c = owner ? (owner[key] || (owner[key] = document.createElement('canvas'))) : document.createElement('canvas');
@@ -4579,8 +4618,8 @@ J.drawMedia = (ctx, plan, t, owner, layer = 'media', previewEdit = false) => {
   const snapshot = transitionFrame(layer);
   const priorAsset = J.mediaAssets.get(prev.itemId);
   const prevSource = prev.type === 'video' ? (snapshot && snapshot.plan === plan && snapshot.index === prev.index ? snapshot.canvas : prev.itemId === cut.itemId && priorAsset.posterElement && priorAsset.posterElement.complete ? priorAsset.posterElement : null) : null;
-  J.drawMediaCut(clear(A), prev, Math.max(prev.start, prev.end - 0.001), { noExit: true, source: prevSource });
-  J.drawMediaCut(clear(B), cut, t, { noEnter: !cut.independentPhases });
+  J.drawMediaCut(clear(A), prev, Math.max(prev.start, prev.end - 0.001), { noExit: true, source: sourceFor(prev) || prevSource });
+  J.drawMediaCut(clear(B), cut, t, { noEnter: !cut.independentPhases, source:sourceFor(cut) });
   const p = J.clamp((t - cut.start) / cut.transDur);
   ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over'; ctx.filter = 'none';
   if (cut.trans === 'crossfade' || !J.TRANS || !J.TRANS[cut.trans]) {
@@ -4592,6 +4631,20 @@ J.drawMedia = (ctx, plan, t, owner, layer = 'media', previewEdit = false) => {
     catch (e) { console.warn('media trans', cut.trans, e); ctx.drawImage(B, 0, 0); }
   }
   ctx.restore();
+  return true;
+};
+// Use the same keyed transition masking for the displayed and copied foreground.
+J.drawForegroundLayer = (lx, plan, t, owner, previewEdit=false) => {
+  const foregroundCut=J.mediaAt(plan,t,'foreground');if(!foregroundCut)return false;
+  const cw=lx.canvas.width,ch=lx.canvas.height;
+  J.drawMedia(lx, plan, t, owner, 'foreground', previewEdit);
+  const previousForeground = foregroundCut.index > 0 && plan.foreground.cuts[foregroundCut.index - 1];
+  if (!previewEdit && foregroundCut.chromaKey && foregroundCut.trans && previousForeground && J.mediaAssets.has(previousForeground.itemId) && Math.abs(previousForeground.end - foregroundCut.start) < 0.06 && t - foregroundCut.start < foregroundCut.transDur) {
+    const mask = owner.ensure(owner.foregroundKeyMask || (owner.foregroundKeyMask = document.createElement('canvas')), cw, ch);
+    const mx = mask.getContext('2d'); mx.setTransform(1, 0, 0, 1, 0, 0); mx.globalAlpha = 1; mx.globalCompositeOperation = 'source-over'; mx.filter = 'none'; mx.clearRect(0, 0, cw, ch);
+    J.drawMediaCut(mx, foregroundCut, t, { noEnter: true, noExit: true, previewEdit: previewEdit });
+    lx.globalCompositeOperation = 'destination-in'; lx.drawImage(mask, 0, 0); lx.globalCompositeOperation = 'source-over';
+  }
   return true;
 };
 })();
@@ -5447,14 +5500,7 @@ class Renderer {
       this.frame(ctx, plan, t, Object.assign({}, opt, { noForeground: true, lyricLayer: 'below' }));
       const layer = this.ensure(this.foregroundLayer || (this.foregroundLayer = document.createElement('canvas')), cw, ch);
       const lx = layer.getContext('2d'); lx.setTransform(1, 0, 0, 1, 0, 0); lx.globalAlpha = 1; lx.globalCompositeOperation = 'source-over'; lx.filter = 'none'; lx.clearRect(0, 0, cw, ch);
-      J.drawMedia(lx, plan, t, this, 'foreground', !!opt.previewEdit);
-      const previousForeground = foregroundCut.index > 0 && plan.foreground.cuts[foregroundCut.index - 1];
-      if (!opt.previewEdit && foregroundCut.chromaKey && foregroundCut.trans && previousForeground && J.mediaAssets.has(previousForeground.itemId) && Math.abs(previousForeground.end - foregroundCut.start) < 0.06 && t - foregroundCut.start < foregroundCut.transDur) {
-        const mask = this.ensure(this.foregroundKeyMask || (this.foregroundKeyMask = document.createElement('canvas')), cw, ch);
-        const mx = mask.getContext('2d'); mx.setTransform(1, 0, 0, 1, 0, 0); mx.globalAlpha = 1; mx.globalCompositeOperation = 'source-over'; mx.filter = 'none'; mx.clearRect(0, 0, cw, ch);
-        J.drawMediaCut(mx, foregroundCut, t, { noEnter: true, noExit: true, previewEdit: !!opt.previewEdit });
-        lx.globalCompositeOperation = 'destination-in'; lx.drawImage(mask, 0, 0); lx.globalCompositeOperation = 'source-over';
-      }
+      J.drawForegroundLayer(lx, plan, t, this, !!opt.previewEdit);
       ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = plan.foreground.opacity / 100;
       ctx.globalCompositeOperation = { normal: 'source-over', multiply: 'multiply', screen: 'screen' }[plan.foreground.blend] || 'source-over';
       ctx.drawImage(layer, 0, 0); ctx.restore();
@@ -5466,7 +5512,7 @@ class Renderer {
       return;
     }
     const mediaCut = !opt.noMedia && !opt.transparent && plan.media && J.mediaAt(plan, t);
-    const backgroundMedia = mediaCut && J.mediaAssets.has(mediaCut.itemId);
+    const backgroundMedia = J.mediaSourceAvailable(mediaCut);
     const fx = plan.fx, st = plan.style, fps = plan.fps;
     // motion is quantised to 'koma' drawings per second (24fps timebase); random flicker runs on a <=24Hz clock
     const stepDur = J.stepDur(fx, fps);
@@ -5491,7 +5537,7 @@ class Renderer {
     if (!opt.preserveCanvas) ctx.clearRect(0, 0, cw, ch);
     ctx.setTransform(scale, 0, 0, scale, 0, 0);
     // ---------- background ----------
-    const key = plan.keyBg && J.KEY_BG && J.KEY_BG[plan.keyBg] ? plan.keyBg : null;   // 合成用: white-on-black, finished in keyFinish()
+    const key = !opt.copyLyrics && plan.keyBg && J.KEY_BG && J.KEY_BG[plan.keyBg] ? plan.keyBg : null;   // 合成用: white-on-black, finished in keyFinish()
     if (backgroundMedia) {
       ctx.fillStyle = st.schemes[0].bg; ctx.fillRect(0, 0, W, H);
       ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -5537,7 +5583,7 @@ class Renderer {
     const beatInfo = plan.beats && plan.beats.length ? beatAt(plan.beats, tq) : null;
     const energy = plan.energy ? plan.energy[Math.min(plan.energy.length - 1, Math.max(0, Math.floor(t * plan.energyRate)))] : null;
     // ---------- background graphic (per line) ----------
-    if (plan.media?.applyLyricBackground !== false && !opt.transparent && !key && mainCut && mainCut.bg && mainCut.bg !== 'none' && J.BG[mainCut.bg]) {
+    if ((opt.copyLyrics || plan.media?.applyLyricBackground !== false && !opt.transparent) && !key && mainCut && mainCut.bg && mainCut.bg !== 'none' && J.BG[mainCut.bg]) {
       const env = this.makeEnv(ctx, plan, mainCut, sc, { pass: 'main', t: tq, lt: tq - mainCut.start, ltb: tq - mainCut.start, step, scale, allowFilter, energy, beat: beatInfo, bgOnly: true });
       ctx.save();
       try { J.BG[mainCut.bg].draw(env, mainCut.bgP || {}); } catch (e) { console.warn('bg', mainCut.bg, e); }
@@ -37069,7 +37115,7 @@ function openCutDetails(layer,index,part=0) {
   }
   function options(field) {
     if(field==='blend') return ['normal','multiply','screen','overlay'].map((v,i)=>[v,[L('通常','Normal'),L('乗算','Multiply'),L('スクリーン','Screen'),L('オーバーレイ','Overlay')][i]]);
-    if(field==='itemId') return [['',L('画像無し','No image')],...S.project[layer].items.map(a=>[a.id,a.name])];
+    if(field==='itemId') return [['',L('画像無し','No image')],...J.mediaCopyItems(layer).map(a=>[a.id,a.name]),...S.project[layer].items.map(a=>[a.id,a.name])];
     if(field==='scheme') return S.plan.style.schemes.map((_,i)=>[String(i),String(i+1)]);
     if(field==='technique') return [['',L('自動','Auto')],['none',L('演出無し','No effects')],...Object.entries(J.MEDIA_TECH).filter(([,d])=>!d.stage).map(([id,d])=>[id,d.name])];
     if(field==='entrance'||field==='departure') return [['',L('自動','Auto')],['none',L('即時（なし）','Instant (none)')],...J.mediaPhaseOptions(field==='entrance'?'enter':'exit').map(([id,d])=>[id,d.name])];
@@ -37182,9 +37228,9 @@ function drawItemFrames() {
     if(layer==='lyrics') {
       for(const cut of J.lyricCutsAt(S.plan,S.t)) if(cut.line>=0) items.push({layer,cut,index:cut.line,area:cut.area||{x:0,y:0,w:1,h:1}});
     } else {
-      const cut=J.mediaAt(S.plan,S.t,layer),asset=cut&&J.mediaAssets.get(cut.itemId),src=asset?.element;
-      if(!src)continue;
-      const sw=src.videoWidth||src.naturalWidth||src.width,sh=src.videoHeight||src.naturalHeight||src.height;
+      const cut=J.mediaAt(S.plan,S.t,layer),dimensions=J.mediaSourceDimensions(S.plan,cut,S.t);
+      if(!dimensions)continue;
+      const sw=dimensions.width,sh=dimensions.height;
       let area=J.mediaPlacementRect(cut.placement,sw,sh,S.plan.W,S.plan.H);
       if(!area)continue;
       if(!cut.placement && cut.layout==='cover') {const scale=Math.max(S.plan.W/sw,S.plan.H/sh);area={x:(1-sw*scale/S.plan.W)/2,y:(1-sh*scale/S.plan.H)/2,w:sw*scale/S.plan.W,h:sh*scale/S.plan.H};}
@@ -37268,7 +37314,7 @@ function drawTimelineLinks() {
     const startX = canvas.offsetLeft + cut.start / Math.max(0.001, S.plan.duration) * canvas.clientWidth;
     const y = canvas.offsetTop + 11;
     const actions = [['dice', false, layer === 'lyrics' ? 'この行を再抽選' : 'このカットを再抽選', ICON.dice], ['lock', locked, layer === 'lyrics' ? 'この行の構成をロック' : 'このカットをロック', ICON.lock]];
-    if (layer === 'lyrics' || J.mediaAssets.has(cut.itemId)) actions.push(['area', false, layer === 'lyrics' ? 'この行の表示エリアを編集' : 'このカットの配置とサイズを編集', ICON.area]);
+    if (layer === 'lyrics' || J.mediaSourceAvailable(cut)) actions.push(['area', false, layer === 'lyrics' ? 'この行の表示エリアを編集' : 'このカットの配置とサイズを編集', ICON.area]);
     if (layer !== 'lyrics') actions.push(['details', false, J.mediaLabel('カットの詳細編集','Edit cut details'), ICON.details]);
     if (layer !== 'lyrics') actions.push(['remove', false, 'このカットを削除', ICON.remove]);
     const left = J.clamp(startX + 25, canvas.offsetLeft + 9, canvas.offsetLeft + canvas.clientWidth - (actions.length - 1) * 20 - 23);
@@ -37654,9 +37700,9 @@ function openAreaEditor(index) {
 function openMediaEditor(index, layer) {
   if (S.exporting || S.tap) return;
   if (S.areaEdit) cancelAreaEditor();
-  const cut = S.plan[layer].cuts[index], asset = cut && J.mediaAssets.get(cut.itemId);
-  if (!asset) return;
-  const source = asset.element, sw = source.videoWidth || source.naturalWidth, sh = source.videoHeight || source.naturalHeight;
+  const cut = S.plan[layer].cuts[index], dimensions = J.mediaSourceDimensions(S.plan,cut,S.t);
+  if (!dimensions) return;
+  const sw = dimensions.width, sh = dimensions.height;
   const draft = J.mediaPlacementRect(cut.placement, sw, sh, S.plan.W, S.plan.H);
   if (!draft) return;
   pause();
@@ -37811,6 +37857,7 @@ function insertMediaFromLyrics() {
 }
 function mediaThumb(item, cls = '') {
   if (!item) return `<span class="missing media-ln-thumb" aria-hidden="true">—</span>`;
+  if (J.isMediaCopy(item.id)) return `<span class="missing ${cls}" title="${escapeHtml(item.name)}" aria-label="${escapeHtml(item.name)}">↻</span>`;
   const asset = J.mediaAssets.get(item.id);
   if (!asset) return `<span class="missing">素材なし</span>`;
   return `<img class="${cls}" src="${asset.poster || asset.url}" alt="">`;
@@ -37958,12 +38005,13 @@ function renderMediaLines() {
   };
   S.plan[layer].cuts.forEach((cut, i) => {
     addButton(i);
-    const item = m.items.find(x => x.id === cut.itemId), ov = Object.assign({}, m.overrides[cut.itemId] || {}, m.cutOverrides[i] || {});
-    const fileSelect = `<select class="media-cut-file" ${m.randomOrder ? `disabled title="${J.mediaLabel('素材を指定するにはランダム順をオフにしてください', 'Turn off random order to select a file')}"` : ''} aria-label="${i + 1}カット目の素材"><option value="">画像無し</option>${m.items.map(asset => `<option value="${escapeHtml(asset.id)}" ${cut.itemId === asset.id ? 'selected' : ''}>${escapeHtml(asset.name)}</option>`).join('')}</select>`;
+    const item = [...m.items,...J.mediaCopyItems(layer)].find(x => x.id === cut.itemId), ov = Object.assign({}, m.overrides[cut.itemId] || {}, m.cutOverrides[i] || {});
+    const fileSelect = `<select class="media-cut-file" ${m.randomOrder ? `disabled title="${J.mediaLabel('素材を指定するにはランダム順をオフにしてください', 'Turn off random order to select a file')}"` : ''} aria-label="${i + 1}カット目の素材"><option value="">画像無し</option>${[...J.mediaCopyItems(layer),...m.items].map(asset => `<option value="${escapeHtml(asset.id)}" ${cut.itemId === asset.id ? 'selected' : ''}>${escapeHtml(asset.name)}</option>`).join('')}</select>`;
     if (ov.layout === 'stretch') ov.layout = 'cover';
     for (const key of ['layout', 'enter', 'hold', 'exit', 'treat']) if (ov[key] === undefined) ov[key] = cut[key];
     const asset = J.mediaAssets.get(cut.itemId), source = asset && asset.element;
-    const sw = source && (source.videoWidth || source.naturalWidth), sh = source && (source.videoHeight || source.naturalHeight);
+    const dimensions=J.mediaSourceDimensions(S.plan,cut,cut.start);
+    const sw=dimensions?.width,sh=dimensions?.height;
     const placement = J.mediaPlacementRect(cut.placement, sw, sh, S.plan.W, S.plan.H);
     const placementControl = `<span class="foreground-placement-controls"><button class="foreground-placement-open ghost" type="button" ${placement ? '' : 'disabled'} aria-label="${i + 1}カット目の配置とサイズを編集"><span class="foreground-placement-thumb"><i style="left:${(placement ? placement.x : 0) * 100}%;top:${(placement ? placement.y : 0) * 100}%;width:${(placement ? placement.w : 1) * 100}%;height:${(placement ? placement.h : 1) * 100}%;transform:rotate(${cut.placement ? cut.placement.angle || 0 : 0}deg)"></i></span>配置・サイズを編集</button>${cut.placementMode === 'auto' ? `<span class="tagl">${J.mediaLabel('自動配置', 'Auto placement')}</span>` : ''}${cut.placementMode === 'manual' ? '<button class="foreground-placement-reset ghost" type="button">自動配置に戻す</button>' : ''}</span>`;
     const li = document.createElement('li'); li.className = 'ln media-ln';
@@ -37974,7 +38022,7 @@ function renderMediaLines() {
       mediaOv(i, { [select.dataset.mediaPhase]: e.target.value || null, lock: false }, layer); replan();
     }));
     li.querySelector('.time').addEventListener('change', e => { m.timing.lineTimes[i] = Math.max(0, parseFloat(e.target.value) || 0); replan(); });
-    li.querySelector('.media-cut-file').addEventListener('change', e => { mediaOv(i, { itemId: e.target.value || null }, layer); replan(); });
+    li.querySelector('.media-cut-file').addEventListener('change', e => { mediaOv(i, { itemId: e.target.value || null, ...(ov.lock?{lockedItemId:e.target.value||null}:{}) }, layer); replan(); });
     li.querySelector('.media-technique').addEventListener('change', e => { if (e.target.value !== 'legacy') { mediaOv(i, { technique: e.target.value || null, lock: false, lockedTechnique: undefined }, layer); replan(); } });
     const videoLoop = li.querySelector('.media-video-loop input');
     if (videoLoop) videoLoop.addEventListener('change', e => { mediaOv(i, { videoLoop: e.target.checked }); replan(); });

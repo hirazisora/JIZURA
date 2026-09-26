@@ -92,6 +92,41 @@ J.normalizeMedia = m => {
   o.opacity = J.clamp(+o.opacity || 0, 0, 100);
   return o;
 };
+// Virtual sources refer to the current frame; no duplicated files or recursive background reads.
+J.mediaCopyItems = (layer='media') => layer !== 'media' ? [] : [
+  {id:'@copy:foreground-source',type:'copy',name:J.mediaLabel('前景をコピー（素材のみ）','Copy foreground (source only)')},
+  {id:'@copy:foreground-render',type:'copy',name:J.mediaLabel('前景をコピー（演出含む）','Copy foreground (with effects)')},
+  {id:'@copy:lyrics',type:'copy',name:J.mediaLabel('歌詞のコピー','Copy lyrics')},
+];
+J.isMediaCopy = id => ['@copy:foreground-source','@copy:foreground-render','@copy:lyrics'].includes(id);
+J.mediaSourceAvailable = cut => !!cut && (J.isMediaCopy(cut.itemId) || J.mediaAssets.has(cut.itemId));
+J.mediaSourceDimensions = (plan,cut,t=0) => {
+  if(!cut)return null;
+  if(J.isMediaCopy(cut.itemId) && cut.itemId!=='@copy:foreground-source')return {width:plan.W,height:plan.H};
+  if(cut.itemId==='@copy:foreground-source')cut=J.mediaAt(plan,t,'foreground');
+  const source=cut&&J.mediaAssets.get(cut.itemId)?.element;
+  const width=source&&(source.videoWidth||source.naturalWidth||source.width),height=source&&(source.videoHeight||source.naturalHeight||source.height);
+  return width&&height?{width,height}:null;
+};
+J.mediaCopySource = (plan,cut,t,owner,w,h) => {
+  if(!J.isMediaCopy(cut.itemId))return null;
+  if(cut.itemId==='@copy:foreground-source') {
+    const foreground=J.mediaAt(plan,t,'foreground');
+    return foreground&&J.mediaAssets.get(foreground.itemId)?.element || null;
+  }
+  const renderer=owner.copyRenderer || (owner.copyRenderer=new J.Renderer());
+  const canvas=owner.copySourceCanvas || (owner.copySourceCanvas=document.createElement('canvas'));
+  if(canvas.width!==w)canvas.width=w;if(canvas.height!==h)canvas.height=h;
+  const ctx=canvas.getContext('2d');ctx.setTransform(1,0,0,1,0,0);ctx.globalAlpha=1;ctx.globalCompositeOperation='source-over';ctx.filter='none';ctx.clearRect(0,0,w,h);
+  if(cut.itemId==='@copy:lyrics') {
+    if(J.lyricCutsAt(plan,t).length)renderer.frame(ctx,plan,t,{scale:w/plan.W,noMedia:true,noForeground:true,transparent:true,noHud:true,copyLyrics:true});
+  } else {
+    J.drawForegroundLayer(ctx,plan,t,renderer);
+    // Foreground opacity belongs to the copied result, before background effects.
+    ctx.save();ctx.globalCompositeOperation='destination-in';ctx.globalAlpha=(plan.foreground?.opacity??100)/100;ctx.fillStyle='#fff';ctx.fillRect(0,0,w,h);ctx.restore();
+  }
+  return canvas;
+};
 J.mediaOrder = (project, layer = 'media') => {
   const m = J.normalizeMedia(project[layer]), order = m.items.slice();
   if (m.randomOrder && order.length > 1) {
@@ -105,16 +140,18 @@ J.planMedia = (project, lyricPlan, audioDuration, layer = 'media') => {
   const fixedDuration = Number.isFinite(+project.durationOverride) && +project.durationOverride > 0 ? +project.durationOverride : null;
   const count = m.manualCuts ? m.cutCount : items.length ? (m.loop ? (m.cutCount || Math.min(1000, items.length * 2)) : items.length) : 0;
   const order = J.mediaOrder(project, layer);
+  const findItem = id => items.find(item=>item.id===id) || J.mediaCopyItems(layer).find(item=>item.id===id);
   const baseItems = Array.from({ length: count }, (_, i) => {
     const assigned = m.cutOverrides[i];
-    if (assigned && Object.hasOwn(assigned, 'itemId')) return items.find(item => item.id === assigned.itemId) || null;
+    if (assigned && Object.hasOwn(assigned, 'itemId')) return findItem(assigned.itemId) || null;
     return items.length ? items[i % items.length] : null;
   });
   let randomIndex = 0;
   const displayItems = baseItems.map((item, i) => {
     if (!item) return null; // Explicit blank cuts never consume a shuffled slot.
     const ov = Object.assign({}, m.overrides[item.id] || {}, m.cutOverrides[i] || {});
-    if (ov.lock) return items.find(x => x.id === (ov.lockedItemId || item.id)) || null;
+    if (ov.lock) return findItem(ov.lockedItemId || item.id) || null;
+    if (item.type === 'copy') return item;
     return m.randomOrder && order.length ? order[randomIndex++ % order.length] : item;
   });
   const itemAt = i => displayItems[i];
@@ -177,7 +214,7 @@ J.planMedia = (project, lyricPlan, audioDuration, layer = 'media') => {
       cut.placement = J.normalizeMediaPlacement(ov.lockedPlacement);
       cut.placementMode = ov.lockedPlacementMode || (cut.placement ? 'auto' : 'default');
     } else if (cut.technique && !['none', 'legacy'].includes(cut.technique) && cut.effectSettings?.autoPlacement !== false) {
-      cut.placement = J.autoMediaPlacement(project, cut, items.find(item => item.id === cut.itemId), lyricPlan, layer);
+      cut.placement = J.autoMediaPlacement(project, cut, (findItem(cut.itemId)?.type==='copy'?{...findItem(cut.itemId),width:lyricPlan.W,height:lyricPlan.H}:findItem(cut.itemId)), lyricPlan, layer);
       cut.placementMode = 'auto';
     }
   }
@@ -346,7 +383,7 @@ J.chromaSource = (src, cut, w, h) => {
   x.putImageData(pixels, 0, 0); return c;
 };
 J.drawMediaCut = (ctx, cut, t, options = {}) => {
-  const asset = J.mediaAssets.get(cut.itemId); if (!asset) return false;
+  const asset = J.mediaAssets.get(cut.itemId); if (!asset && !options.source) return false;
   const src = options.source || asset.element, sw = src.videoWidth || src.naturalWidth || src.width, sh = src.videoHeight || src.naturalHeight || src.height;
   if (!sw || !sh) return false;
   const w = ctx.canvas.width, h = ctx.canvas.height, d = Math.max(0.04, cut.end - cut.start), p = J.clamp((t - cut.start) / d, 0, 1);
@@ -388,11 +425,13 @@ J.drawMediaCut = (ctx, cut, t, options = {}) => {
   return true;
 };
 J.drawMedia = (ctx, plan, t, owner, layer = 'media', previewEdit = false) => {
-  const cut = J.mediaAt(plan, t, layer); if (!cut || !J.mediaAssets.has(cut.itemId)) return false;
+  const cut = J.mediaAt(plan, t, layer); if (!J.mediaSourceAvailable(cut)) return false;
+  owner ||= {};
+  const sourceFor = c => J.isMediaCopy(c.itemId) ? J.mediaCopySource(plan,c,t,owner,ctx.canvas.width,ctx.canvas.height) : null;
   const prev = cut.index > 0 ? plan[layer].cuts[cut.index - 1] : null;
   const next = plan[layer].cuts[cut.index + 1];
-  const active = !previewEdit && prev && cut.trans && t - cut.start < cut.transDur && Math.abs(prev.end - cut.start) < 0.06 && J.mediaAssets.has(prev.itemId);
-  if (!active) return J.drawMediaCut(ctx, cut, t, { noEnter: !cut.independentPhases && !!cut.trans, noExit: !cut.independentPhases && !!(next && next.trans && Math.abs(next.start - cut.end) < 0.06), previewEdit });
+  const active = !previewEdit && prev && cut.trans && t - cut.start < cut.transDur && Math.abs(prev.end - cut.start) < 0.06 && J.mediaSourceAvailable(prev);
+  if (!active) return J.drawMediaCut(ctx, cut, t, { noEnter: !cut.independentPhases && !!cut.trans, noExit: !cut.independentPhases && !!(next && next.trans && Math.abs(next.start - cut.end) < 0.06), previewEdit, source:sourceFor(cut) });
   const w = ctx.canvas.width, h = ctx.canvas.height;
   const canvas = key => {
     const c = owner ? (owner[key] || (owner[key] = document.createElement('canvas'))) : document.createElement('canvas');
@@ -405,8 +444,8 @@ J.drawMedia = (ctx, plan, t, owner, layer = 'media', previewEdit = false) => {
   const snapshot = transitionFrame(layer);
   const priorAsset = J.mediaAssets.get(prev.itemId);
   const prevSource = prev.type === 'video' ? (snapshot && snapshot.plan === plan && snapshot.index === prev.index ? snapshot.canvas : prev.itemId === cut.itemId && priorAsset.posterElement && priorAsset.posterElement.complete ? priorAsset.posterElement : null) : null;
-  J.drawMediaCut(clear(A), prev, Math.max(prev.start, prev.end - 0.001), { noExit: true, source: prevSource });
-  J.drawMediaCut(clear(B), cut, t, { noEnter: !cut.independentPhases });
+  J.drawMediaCut(clear(A), prev, Math.max(prev.start, prev.end - 0.001), { noExit: true, source: sourceFor(prev) || prevSource });
+  J.drawMediaCut(clear(B), cut, t, { noEnter: !cut.independentPhases, source:sourceFor(cut) });
   const p = J.clamp((t - cut.start) / cut.transDur);
   ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over'; ctx.filter = 'none';
   if (cut.trans === 'crossfade' || !J.TRANS || !J.TRANS[cut.trans]) {
@@ -418,6 +457,20 @@ J.drawMedia = (ctx, plan, t, owner, layer = 'media', previewEdit = false) => {
     catch (e) { console.warn('media trans', cut.trans, e); ctx.drawImage(B, 0, 0); }
   }
   ctx.restore();
+  return true;
+};
+// Use the same keyed transition masking for the displayed and copied foreground.
+J.drawForegroundLayer = (lx, plan, t, owner, previewEdit=false) => {
+  const foregroundCut=J.mediaAt(plan,t,'foreground');if(!foregroundCut)return false;
+  const cw=lx.canvas.width,ch=lx.canvas.height;
+  J.drawMedia(lx, plan, t, owner, 'foreground', previewEdit);
+  const previousForeground = foregroundCut.index > 0 && plan.foreground.cuts[foregroundCut.index - 1];
+  if (!previewEdit && foregroundCut.chromaKey && foregroundCut.trans && previousForeground && J.mediaAssets.has(previousForeground.itemId) && Math.abs(previousForeground.end - foregroundCut.start) < 0.06 && t - foregroundCut.start < foregroundCut.transDur) {
+    const mask = owner.ensure(owner.foregroundKeyMask || (owner.foregroundKeyMask = document.createElement('canvas')), cw, ch);
+    const mx = mask.getContext('2d'); mx.setTransform(1, 0, 0, 1, 0, 0); mx.globalAlpha = 1; mx.globalCompositeOperation = 'source-over'; mx.filter = 'none'; mx.clearRect(0, 0, cw, ch);
+    J.drawMediaCut(mx, foregroundCut, t, { noEnter: true, noExit: true, previewEdit: previewEdit });
+    lx.globalCompositeOperation = 'destination-in'; lx.drawImage(mask, 0, 0); lx.globalCompositeOperation = 'source-over';
+  }
   return true;
 };
 })();

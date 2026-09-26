@@ -5,6 +5,9 @@ const path = require('node:path');
 const context = vm.createContext({ window: {} });
 for (const file of ['01_util.js', '08d_media.js']) vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'src', file), 'utf8'), context);
 const J = context.window.J;
+// This unit harness isolates the media planner from the optional effects module.
+J.mediaEffectSettings = () => ({applyLyricBackground:true});
+J.mediaLabel = ja => ja;
 const items = ['a', 'b', 'c'].map(id => ({ id, name: id + '.png', type: 'image' }));
 const project = { seed: 42, media: { items, randomOrder: true, seed: 4, timing: { lineTimes: { 1: 3 } }, overrides: { a: { layout: 'contain' } }, blend: 'screen', opacity: 40 } };
 const lyric = { duration: 9, lines: [{ start: 0.4 }, { start: 2 }, { start: 5 }] };

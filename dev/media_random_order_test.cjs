@@ -47,7 +47,7 @@ const assert=require('node:assert/strict');
         assert.equal(await page.locator('#mediaRandom').isEnabled(),true);assert.equal(await page.locator('#mediaRandom').isChecked(),true);
         assert.deepEqual(await page.evaluate(layer=>J.ui.plan[layer].cuts.map(c=>c.itemId),layer),beforeReload);
         // Loop tap-sync uses the same order, and can be toggled afterward.
-        await page.locator('#btnTap').click();
+        await page.locator('#btnTapMedia').click();
         for(let i=0;i<7;i++)await page.evaluate(t=>{J.ui.t=t;document.querySelector('#tapBtn').click()},.4+i);
         await page.locator('#tapStop').click();
         assert.equal(await page.locator('#mediaRandom').isEnabled(),true);
