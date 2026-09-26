@@ -407,7 +407,6 @@ function drawMediaTimeline(layer = 'media') {
     x.fillStyle = cut.type === 'video' ? 'rgba(22,244,212,0.28)' : 'rgba(245,165,12,0.28)'; x.fillRect(a, 17 * dpr, Math.max(1, b - a - 1), h - 20 * dpr);
     x.fillStyle = cut.type === 'video' ? '#16f4d4' : '#f5a50c'; x.fillRect(a, 17 * dpr, 2 * dpr, h - 20 * dpr);
     x.fillRect(a - 2 * dpr, 14 * dpr, 6 * dpr, 6 * dpr);
-    if (b - a > 45 * dpr) { x.save(); x.beginPath(); x.rect(a, 17 * dpr, b - a - 3, h - 20 * dpr); x.clip(); x.fillStyle = '#ece7e1'; x.fillText(cut.name, a + 5 * dpr, 31 * dpr); x.restore(); }
   }
   x.fillStyle = '#f5a50c'; x.fillRect(Math.round(X(S.t)) - dpr, 0, 2 * dpr, h);
   drawTimelineDragGuide(x, w, h, dpr, layer);
@@ -771,23 +770,45 @@ function removeLyricCut(line,part) {
   S.project.lyricCutOptions[key]={...S.project.lyricCutOptions[key],removed:true};
   replan();
 }
-function openTimelineAssetPicker(layer,index){
-  if(S.exporting || S.tap)return;
-  const cut=S.plan[layer]?.cuts[index];if(!cut)return;
-  pause();
-  const m=S.project[layer],project=S.project,L=J.mediaLabel;
-  const dialog=document.createElement('dialog');dialog.id='timelineAssetDialog';
-  dialog.innerHTML=`<form method="dialog"><h2>${L('素材を変更','Change asset')}</h2><label>${L('素材','Asset')} <select id="timelineAssetSelect"><option value="">${L('画像無し','No image')}</option>${[...J.mediaCopyItems(layer),...m.items].map(item=>`<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)}</option>`).join('')}</select></label><p class="note"></p><div class="row"><button value="cancel">${L('キャンセル','Cancel')}</button><button value="apply">${L('適用','Apply')}</button></div></form>`;
-  const select=dialog.querySelector('select');select.value=cut.itemId || '';
-  if(m.randomOrder){select.disabled=true;dialog.querySelector('[value="apply"]').disabled=true;dialog.querySelector('p').textContent=L('素材を指定するにはランダム順をオフにしてください','Turn off random order to select a file');}
-  dialog.addEventListener('close',()=>{
-    if(dialog.returnValue==='apply' && S.project===project){const options=mediaCutOptions(layer,index);mediaOv(index,{itemId:select.value || null,...(options?.lock?{lockedItemId:select.value || null}:{})},layer);replan();}
-    dialog.remove();
-  },{once:true});
-  document.body.append(dialog);dialog.showModal();select.focus();
+function drawTimelineAssetSelects() {
+  const stack=$('timelineStack');
+  let overlay=$('timelineAssets');
+  if(!overlay){overlay=document.createElement('div');overlay.id='timelineAssets';stack.append(overlay);}
+  const retained=new Set();
+  for(const layer of ['foreground','media']){
+    const m=S.project[layer],canvas=$(layer==='foreground'?'foregroundTimeline':'mediaTimeline');
+    const options=`<option value="">${J.mediaLabel('画像無し','No image')}</option>${[...J.mediaCopyItems(layer),...m.items].map(item=>`<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)}</option>`).join('')}`;
+    for(const cut of S.plan[layer].cuts){
+      const key=`${layer}-${cut.index}`,duration=Math.max(.001,S.plan.duration);
+      const width=(cut.end-cut.start)/duration*canvas.clientWidth-10;
+      if(width<=0)continue;
+      retained.add(key);
+      let select=overlay.querySelector(`[data-key="${key}"]`);
+      if(!select){
+        select=document.createElement('select');select.className='timeline-asset-select';select.dataset.key=key;
+        select.dataset.layer=layer;select.dataset.index=cut.index;
+        select.addEventListener('pointerdown',e=>{e.stopPropagation();pause();});
+        select.addEventListener('keydown',e=>e.stopPropagation());
+        select.addEventListener('change',()=>{
+          if(S.exporting || S.tap || S.project[layer].randomOrder)return;
+          const index=+select.dataset.index,ov=mediaCutOptions(layer,index),itemId=select.value || null;
+          mediaOv(index,{itemId,...(ov?.lock?{lockedItemId:itemId}:{})},layer);replan();
+        });
+        overlay.append(select);
+      }
+      // Preserve native dropdown state and focus across timeline redraws.
+      if(select._options!==options){select.innerHTML=options;select._options=options;}
+      if(select.value!==(cut.itemId || ''))select.value=cut.itemId || '';
+      select.disabled=!!(m.randomOrder || S.exporting || S.tap);
+      select.title=m.randomOrder?J.mediaLabel('素材を指定するにはランダム順をオフにしてください','Turn off random order to select a file'):cut.name;
+      select.setAttribute('aria-label',`${J.mediaLabel(layer==='foreground'?'前景':'背景',layer==='foreground'?'Foreground':'Background')} ${cut.index+1}: ${J.mediaLabel('素材を変更','Change asset')}`);
+      select.style.left=`${canvas.offsetLeft+cut.start/duration*canvas.clientWidth+5}px`;
+      select.style.top=`${canvas.offsetTop+22}px`;select.style.width=`${width}px`;
+    }
+  }
+  for(const select of Array.from(overlay.children))if(!retained.has(select.dataset.key))select.remove();
 }
 function performTimelineAction(control) {
-  if (control.dataset.action==='asset'){openTimelineAssetPicker(control.dataset.layer,+control.dataset.index);return;}
   if (control.classList.contains('item-frame-action') && S.playing) return;
   const layer = control.dataset.layer, index = +control.dataset.index;
   if (!Number.isInteger(index) || index < 0) return;
@@ -866,12 +887,8 @@ function drawTimelineLinks() {
     const canvas=$('timeline'), x=canvas.offsetLeft+c.start/S.plan.duration*canvas.clientWidth+10;
     return `<g class="timeline-action" data-action="details" data-layer="lyrics" data-index="${c.index}" data-part="blank" role="button" tabindex="0" aria-label="${J.mediaLabel('カットの詳細編集','Edit cut details')}" transform="translate(${x} ${canvas.offsetTop+33})"><rect x="-9" y="-9" width="18" height="18" rx="3"/>${ICON.details.replace('<svg ','<svg x="-7" y="-7" width="14" height="14" ')}</g>`;
   }).join('');
-  const mediaActions = ['foreground', 'media'].map(layer => S.plan[layer].cuts.map(cut => {
-    const canvas=$(layer==='foreground'?'foregroundTimeline':'mediaTimeline'),duration=Math.max(.001,S.plan.duration);
-    const x=canvas.offsetLeft+cut.start/duration*canvas.clientWidth+5,width=(cut.end-cut.start)/duration*canvas.clientWidth-10;
-    const hit=width>35?`<g class="timeline-action timeline-asset-name" data-action="asset" data-layer="${layer}" data-index="${cut.index}" role="button" tabindex="0" aria-label="${escapeHtml(cut.name)}: ${J.mediaLabel('素材を変更','Change asset')}"><title>${escapeHtml(cut.name)}: ${J.mediaLabel('素材を変更','Change asset')}</title><rect x="${x}" y="${canvas.offsetTop+18}" width="${width}" height="18" style="fill:transparent;stroke:none"/></g>`:'';
-    return action(layer,cut,cut.index,!!mediaCutOptions(layer,cut.index).lock)+hit;
-  }).join('')).join('');
+  const mediaActions = ['foreground', 'media'].map(layer => S.plan[layer].cuts.map(cut => action(layer,cut,cut.index,!!mediaCutOptions(layer,cut.index).lock)).join('')).join('');
+  drawTimelineAssetSelects();
   svg.innerHTML = links + preview + handles + lyricActions + frontmostActions + blankActions + mediaActions;
 }
 function markerNear(clientX, clientY, sourceLayer) {

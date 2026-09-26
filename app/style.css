@@ -490,3 +490,6 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
 #effectPreviewDialog canvas { display:block; width:100%; aspect-ratio:16/9; background:#17171c; }
 #effectPreviewDialog h2 { font-size:16px; padding-right:32px; margin:0 0 14px; }
 .effect-preview-close { position:absolute; top:10px; right:10px; font-size:20px; }
+
+#timelineAssets { position: absolute; inset: 0; pointer-events: none; }
+.timeline-asset-select { position: absolute; pointer-events: auto; min-width: 0; height: 20px; min-height: 0; padding: 0 2px; border-radius: 3px; font-size: 11px; text-overflow: ellipsis; }
