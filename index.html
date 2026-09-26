@@ -37378,7 +37378,7 @@ function disableAndReroll(layer,index,part=null) {
 }
 function disableRerollButton(layer,index,part=null){
   const button=document.createElement('button');button.type='button';button.className='icon ghost disable-reroll';
-  button.title=J.mediaLabel('OFFにして再抽選','Disable current effects and randomize');button.setAttribute('aria-label',button.title);button.innerHTML=ICON.disableReroll;
+  button.title=J.mediaLabel('この演出をOFFにして再抽選','Disable current effects and randomize');button.setAttribute('aria-label',button.title);button.innerHTML=ICON.disableReroll;
   button.addEventListener('click',()=>disableAndReroll(layer,index,part));return button;
 }
 function toggleLyricLineLock(index) {
@@ -37623,7 +37623,7 @@ function drawItemFrames() {
       items.push({layer,cut,index:cut.index,area:{...area,angle:cut.placement?.angle||0}});
     }
   }
-  const L=J.mediaLabel,labels={copy:L('演出をコピー','Copy effects'),paste:L('演出をペースト','Paste effects'),dice:L('再抽選','Randomize'),disableReroll:L('OFFにして再抽選','Disable current effects and randomize'),lock:L('ロック','Lock'),area:L('表示範囲','Display area'),details:L('詳細編集','Edit details'),remove:L('削除','Delete'),frontmost:L('最前に表示','Frontmost')};
+  const L=J.mediaLabel,labels={copy:L('演出をコピー','Copy effects'),paste:L('演出をペースト','Paste effects'),dice:L('再抽選','Randomize'),disableReroll:L('この演出をOFFにして再抽選','Disable current effects and randomize'),lock:L('ロック','Lock'),area:L('表示範囲','Display area'),details:L('詳細編集','Edit details'),remove:L('削除','Delete'),frontmost:L('最前に表示','Frontmost')};
   const layerNames={foreground:L('前景','Foreground'),lyrics:L('歌詞','Lyrics'),media:L('背景','Background')};
   const occupied=[];
   const html=items.map(({layer,cut,index,area})=>{
@@ -37701,7 +37701,7 @@ function drawTimelineLinks() {
     const canvas = $(layer === 'lyrics' ? 'timeline' : layer === 'foreground' ? 'foregroundTimeline' : 'mediaTimeline');
     const startX = canvas.offsetLeft + cut.start / Math.max(0.001, S.plan.duration) * canvas.clientWidth;
     const y = canvas.offsetTop + 11;
-    const actions = [['dice', false, layer === 'lyrics' ? 'この行を再抽選' : 'このカットを再抽選', ICON.dice], ['disableReroll',false,J.mediaLabel('OFFにして再抽選','Disable current effects and randomize'),ICON.disableReroll], ['lock', locked, layer === 'lyrics' ? 'この行の構成をロック' : 'このカットをロック', ICON.lock]];
+    const actions = [['dice', false, layer === 'lyrics' ? 'この行を再抽選' : 'このカットを再抽選', ICON.dice], ['disableReroll',false,J.mediaLabel('この演出をOFFにして再抽選','Disable current effects and randomize'),ICON.disableReroll], ['lock', locked, layer === 'lyrics' ? 'この行の構成をロック' : 'このカットをロック', ICON.lock]];
     if (layer === 'lyrics' || J.mediaSourceAvailable(cut)) actions.push(['area', false, layer === 'lyrics' ? 'この行の表示エリアを編集' : 'このカットの配置とサイズを編集', ICON.area]);
     if (layer !== 'lyrics') actions.push(['details', false, J.mediaLabel('カットの詳細編集','Edit cut details'), ICON.details]);
     if (layer !== 'lyrics') for(const name of ['copy','paste'])actions.push([name,false,name==='copy'?J.mediaLabel('演出をコピー','Copy effects'):J.mediaLabel('演出をペースト','Paste effects'),ICON[name]]);
@@ -39030,7 +39030,7 @@ function bind() {
 
   $('timelineLegend').innerHTML = [
     [ICON.dice,'再抽選','Reroll',''],
-    [ICON.disableReroll,'OFFにして再抽選','Disable current effects and randomize',''],
+    [ICON.disableReroll,'この演出をOFFにして再抽選','Disable current effects and randomize',''],
     [ICON.lock,'ロック','Lock',''],
     [ICON.area,'表示範囲','Display area',''],
     [ICON.details,'詳細編集','Edit details',''],
