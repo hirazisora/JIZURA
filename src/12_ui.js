@@ -1767,7 +1767,7 @@ function renderFx() {
     const v = S.project.fx[k] ?? 0.5;
     row.innerHTML = `<label for="fx_${k}">${label}</label><input id="fx_${k}" type="range" min="0" max="1" step="0.01" value="${v}"><output>${Math.round(v * 100)}</output>`;
     const inp = row.querySelector('input'), out = row.querySelector('output');
-    inp.addEventListener('input', () => { S.project.fx[k] = +inp.value; S.project.mood = null; out.textContent = Math.round(inp.value * 100); markUndoGroup(`fx:${k}`); replanSoon(120); });
+    inp.addEventListener('input', () => { S.project.fx[k] = +inp.value; if (k === 'density') for (const ov of Object.values(S.project.overrides || {})) delete ov.divisionDensity; S.project.mood = null; out.textContent = Math.round(inp.value * 100); markUndoGroup(`fx:${k}`); replanSoon(120); });
     box.appendChild(row);
   });
   $('fxFlash').checked = !!S.project.fx.flash;
@@ -1896,9 +1896,10 @@ function baseName() {
   return ((S.project.title || 'jizura').replace(/[\\/:*?"<>|]+/g, '_').slice(0, 60) || 'jizura') + (k ? (k === 'green' ? '_greenback' : '_blackback') : '');
 }
 function requestFilename(kind) {
-  const dlg = $('filenameDlg'), project = kind === 'project';
+  const dlg = $('filenameDlg'), project = kind === 'project' || kind === 'settings';
   $('filenameDlgTitle').textContent = J.mediaLabel(project ? 'プロジェクトを保存' : 'AE用に書き出し', project ? 'Save project' : 'Export for AE');
-  $('saveFilename').value = baseName() + (project ? '.jizuraichi' : '_ae.json');
+  if (kind === 'settings') $('filenameDlgTitle').textContent = J.mediaLabel('設定のみ書き出し', 'Export settings only');
+  $('saveFilename').value = baseName() + (kind === 'settings' ? '_settings' : '') + (project ? '.jizuraichi' : '_ae.json');
   dlg.returnValue = ''; dlg.showModal(); $('saveFilename').select();
   return new Promise(resolve=>dlg.addEventListener('close',()=>resolve(dlg.returnValue === 'save' ? J.exportFilename($('saveFilename').value,project ? '.jizuraichi' : '.json',baseName()) : null),{once:true}));
 }
@@ -2551,6 +2552,33 @@ function bind() {
     try { await J.saveFile(filename, await J.packProject(project, audio)); }
     catch (err) { toast(J.mediaLabel('保存できませんでした：', 'Could not save: ') + err.message); }
     finally { S.projectBusy = false; $('btnSave').disabled = false; }
+  });
+  $('btnSaveSettings').addEventListener('click', async () => {
+    if (S.projectBusy || S.exporting) return;
+    const filename = await requestFilename('settings'); if (!filename) return;
+    S.projectBusy = true; $('btnSaveSettings').disabled = true;
+    try { await J.saveFile(filename, await J.packProject(J.settingsProject(S.project), null)); }
+    catch (err) { toast(J.mediaLabel('保存できませんでした：', 'Could not save: ') + err.message); }
+    finally { S.projectBusy = false; $('btnSaveSettings').disabled = false; }
+  });
+  $('fileSettings').closest('label').addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('fileSettings').click(); }
+  });
+  $('fileSettings').addEventListener('change', async e => {
+    const file = e.target.files?.[0]; if (!file) return;
+    $('projectMenu').open = false;
+    if (S.projectBusy || S.exporting) { e.target.value = ''; return; }
+    S.projectBusy = true;
+    try {
+      const loaded = await J.unpackProject(file);
+      for (const entry of loaded.files) if (entry.kind === 'font') await J.saveFontFile(entry.id,entry.file);
+      await J.restoreFontFiles(loaded.project.userFonts);
+      pause(); if (S.areaEdit) cancelAreaEditor();
+      S.project = mergeProject(J.applyProjectSettings(S.project,loaded.project));
+      fontKey = ''; syncUI(); replan(); flushSave();
+      toast(J.mediaLabel('設定を読み込みました', 'Settings imported'));
+    } catch (err) { toast(J.mediaLabel('設定を読み込めませんでした：', 'Could not import settings: ') + err.message); }
+    finally { S.projectBusy = false; e.target.value = ''; }
   });
   $('btnAE').addEventListener('click', async () => {
     if (S.projectBusy || S.exporting) return;

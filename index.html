@@ -521,6 +521,8 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
           <button id="btnNew">新規</button>
           <label class="file" tabindex="0" title="素材入りプロジェクト（.jizuraichi）を開く">開く<input id="fileProject" type="file" accept=".jizuraichi"></label>
           <button id="btnSave" title="画像・動画・音声を含むプロジェクトを保存">保存</button>
+          <button id="btnSaveSettings">設定のみ書き出し</button>
+          <label class="file" tabindex="0">設定のみ読み込み<input id="fileSettings" type="file" accept=".jizuraichi,.json"></label>
         </div>
       </details>
       <details class="header-menu" id="outputMenu">
@@ -3750,7 +3752,7 @@ J.plan = (project, audio) => {
     const multiline = ln.text.includes('\n');
     const chunks = ln.manual || (multiline ? [ln.text] : J.chunkText(ln.text));
     plan.lines[li].chunks = chunks;
-    const L = J.lerp(1.3, 0.5, fx.density);
+    const L = J.lerp(1.3, 0.5, ov.divisionDensity ?? fx.density);
     let nC = Math.round(D / L);
     const maxC = chunks.length + (chunks.length >= 2 && D > 2.0 ? 1 : 0);
     nC = J.clamp(nC, 1, Math.max(1, maxC));
@@ -6331,6 +6333,41 @@ J.planForAE = (plan, project) => {
 'use strict';
 const magic = 'JIZURA01', text = new TextEncoder(), decode = new TextDecoder();
 const fail = () => new Error(J.mediaLabel('プロジェクトファイルが不正または未対応の形式です', 'Invalid or unsupported project file'));
+// Explicit settings allowlist keeps song content and future asset fields out of presets.
+const settingKeys = ['themes','style','mood','extra','wa','horror','typo','kinetic','keyBg',
+  'seed','aspect','res','fps','videoSize','videoSizeMode','quality','includeAudio','fx','enabled',
+  'lyricEffects','colors','fonts','userFonts','compositeFonts'];
+const clone = value => JSON.parse(JSON.stringify(value));
+J.projectSettings = project => {
+  const result = {};
+  for (const key of settingKeys) if (project[key] !== undefined) result[key] = clone(project[key]);
+  for (const layer of ['media','foreground']) result[layer] = { effects: clone(J.mediaEffectSettings(project,layer)), opacity: project[layer]?.opacity ?? 100, blend: project[layer]?.blend ?? 'normal' };
+  return result;
+};
+J.settingsProject = project => {
+  const settings = J.projectSettings(project), result = Object.assign(J.defaultProject(),settings);
+  result.lyrics = ''; result.title = ''; result.artist = '';
+  for (const layer of ['media','foreground']) result[layer] = Object.assign(J.normalizeMedia(null),settings[layer]);
+  return result;
+};
+J.applyProjectSettings = (current, source) => {
+  const settings = J.projectSettings(source), result = clone(current);
+  // Density is also an automatic cut splitter. Retain existing line divisions while
+  // accepting the preset density for new lines and future explicit density edits.
+  result.overrides ||= {};
+  J.parseLyrics(current.lyrics).lines.forEach((line,index) => {
+    const ov = result.overrides[index] ||= {};
+    ov.divisionDensity ??= current.fx?.density ?? J.defaultProject().fx.density;
+  });
+  for (const key of settingKeys) if (settings[key] !== undefined) result[key] = settings[key];
+  for (const layer of ['media','foreground']) Object.assign(result[layer],settings[layer]);
+  // Existing cuts may still refer to fonts absent from the preset.
+  for (const key of ['userFonts','compositeFonts']) {
+    const imported = result[key] || [];
+    result[key] = [...(current[key] || []).filter(f => !imported.some(g => g.key === f.key)),...imported];
+  }
+  return result;
+};
 J.packProject = async (project, audioFile) => {
   const entries = [], parts = []; let offset = 0;
   const add = (kind, id, file, name) => {
@@ -38448,7 +38485,7 @@ function renderFx() {
     const v = S.project.fx[k] ?? 0.5;
     row.innerHTML = `<label for="fx_${k}">${label}</label><input id="fx_${k}" type="range" min="0" max="1" step="0.01" value="${v}"><output>${Math.round(v * 100)}</output>`;
     const inp = row.querySelector('input'), out = row.querySelector('output');
-    inp.addEventListener('input', () => { S.project.fx[k] = +inp.value; S.project.mood = null; out.textContent = Math.round(inp.value * 100); markUndoGroup(`fx:${k}`); replanSoon(120); });
+    inp.addEventListener('input', () => { S.project.fx[k] = +inp.value; if (k === 'density') for (const ov of Object.values(S.project.overrides || {})) delete ov.divisionDensity; S.project.mood = null; out.textContent = Math.round(inp.value * 100); markUndoGroup(`fx:${k}`); replanSoon(120); });
     box.appendChild(row);
   });
   $('fxFlash').checked = !!S.project.fx.flash;
@@ -38577,9 +38614,10 @@ function baseName() {
   return ((S.project.title || 'jizura').replace(/[\\/:*?"<>|]+/g, '_').slice(0, 60) || 'jizura') + (k ? (k === 'green' ? '_greenback' : '_blackback') : '');
 }
 function requestFilename(kind) {
-  const dlg = $('filenameDlg'), project = kind === 'project';
+  const dlg = $('filenameDlg'), project = kind === 'project' || kind === 'settings';
   $('filenameDlgTitle').textContent = J.mediaLabel(project ? 'プロジェクトを保存' : 'AE用に書き出し', project ? 'Save project' : 'Export for AE');
-  $('saveFilename').value = baseName() + (project ? '.jizuraichi' : '_ae.json');
+  if (kind === 'settings') $('filenameDlgTitle').textContent = J.mediaLabel('設定のみ書き出し', 'Export settings only');
+  $('saveFilename').value = baseName() + (kind === 'settings' ? '_settings' : '') + (project ? '.jizuraichi' : '_ae.json');
   dlg.returnValue = ''; dlg.showModal(); $('saveFilename').select();
   return new Promise(resolve=>dlg.addEventListener('close',()=>resolve(dlg.returnValue === 'save' ? J.exportFilename($('saveFilename').value,project ? '.jizuraichi' : '.json',baseName()) : null),{once:true}));
 }
@@ -39232,6 +39270,33 @@ function bind() {
     try { await J.saveFile(filename, await J.packProject(project, audio)); }
     catch (err) { toast(J.mediaLabel('保存できませんでした：', 'Could not save: ') + err.message); }
     finally { S.projectBusy = false; $('btnSave').disabled = false; }
+  });
+  $('btnSaveSettings').addEventListener('click', async () => {
+    if (S.projectBusy || S.exporting) return;
+    const filename = await requestFilename('settings'); if (!filename) return;
+    S.projectBusy = true; $('btnSaveSettings').disabled = true;
+    try { await J.saveFile(filename, await J.packProject(J.settingsProject(S.project), null)); }
+    catch (err) { toast(J.mediaLabel('保存できませんでした：', 'Could not save: ') + err.message); }
+    finally { S.projectBusy = false; $('btnSaveSettings').disabled = false; }
+  });
+  $('fileSettings').closest('label').addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('fileSettings').click(); }
+  });
+  $('fileSettings').addEventListener('change', async e => {
+    const file = e.target.files?.[0]; if (!file) return;
+    $('projectMenu').open = false;
+    if (S.projectBusy || S.exporting) { e.target.value = ''; return; }
+    S.projectBusy = true;
+    try {
+      const loaded = await J.unpackProject(file);
+      for (const entry of loaded.files) if (entry.kind === 'font') await J.saveFontFile(entry.id,entry.file);
+      await J.restoreFontFiles(loaded.project.userFonts);
+      pause(); if (S.areaEdit) cancelAreaEditor();
+      S.project = mergeProject(J.applyProjectSettings(S.project,loaded.project));
+      fontKey = ''; syncUI(); replan(); flushSave();
+      toast(J.mediaLabel('設定を読み込みました', 'Settings imported'));
+    } catch (err) { toast(J.mediaLabel('設定を読み込めませんでした：', 'Could not import settings: ') + err.message); }
+    finally { S.projectBusy = false; e.target.value = ''; }
   });
   $('btnAE').addEventListener('click', async () => {
     if (S.projectBusy || S.exporting) return;

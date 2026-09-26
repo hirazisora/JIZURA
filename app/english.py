@@ -1,6 +1,8 @@
 """English copy for the browser edition. The Japanese source stays authoritative."""
 
 BODY = {
+    '設定のみ書き出し': 'Export settings only',
+    '設定のみ読み込み': 'Import settings only',
     '歌詞・曲': 'Lyrics & music',
     'タイムラインのアイコン凡例': 'Timeline icon legend',
     'ファイル名': 'File name',
@@ -355,6 +357,8 @@ def replace_copy(source, glossary):
 # Fork UI text is translated before the original glossary so short common
 # words such as 歌詞 and 追加 cannot split a longer fork label in half.
 FORK_BODY = {
+    '設定のみ書き出し': 'Export settings only',
+    '設定のみ読み込み': 'Import settings only',
     "全角の縦線で囲んだ空白は、文字なし・演出のみの歌詞行になります": "Spaces between full-width vertical bars create a lyric line with effects only and no text",
     '配置・サイズにも自動で変化をつける': 'Vary lyric position and size automatically',
     '最小・最大サイズ倍率（％）': 'Minimum / maximum area scale (%)',

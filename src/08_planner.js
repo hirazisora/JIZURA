@@ -281,7 +281,7 @@ J.plan = (project, audio) => {
     const multiline = ln.text.includes('\n');
     const chunks = ln.manual || (multiline ? [ln.text] : J.chunkText(ln.text));
     plan.lines[li].chunks = chunks;
-    const L = J.lerp(1.3, 0.5, fx.density);
+    const L = J.lerp(1.3, 0.5, ov.divisionDensity ?? fx.density);
     let nC = Math.round(D / L);
     const maxC = chunks.length + (chunks.length >= 2 && D > 2.0 ? 1 : 0);
     nC = J.clamp(nC, 1, Math.max(1, maxC));

@@ -4,6 +4,41 @@
 'use strict';
 const magic = 'JIZURA01', text = new TextEncoder(), decode = new TextDecoder();
 const fail = () => new Error(J.mediaLabel('プロジェクトファイルが不正または未対応の形式です', 'Invalid or unsupported project file'));
+// Explicit settings allowlist keeps song content and future asset fields out of presets.
+const settingKeys = ['themes','style','mood','extra','wa','horror','typo','kinetic','keyBg',
+  'seed','aspect','res','fps','videoSize','videoSizeMode','quality','includeAudio','fx','enabled',
+  'lyricEffects','colors','fonts','userFonts','compositeFonts'];
+const clone = value => JSON.parse(JSON.stringify(value));
+J.projectSettings = project => {
+  const result = {};
+  for (const key of settingKeys) if (project[key] !== undefined) result[key] = clone(project[key]);
+  for (const layer of ['media','foreground']) result[layer] = { effects: clone(J.mediaEffectSettings(project,layer)), opacity: project[layer]?.opacity ?? 100, blend: project[layer]?.blend ?? 'normal' };
+  return result;
+};
+J.settingsProject = project => {
+  const settings = J.projectSettings(project), result = Object.assign(J.defaultProject(),settings);
+  result.lyrics = ''; result.title = ''; result.artist = '';
+  for (const layer of ['media','foreground']) result[layer] = Object.assign(J.normalizeMedia(null),settings[layer]);
+  return result;
+};
+J.applyProjectSettings = (current, source) => {
+  const settings = J.projectSettings(source), result = clone(current);
+  // Density is also an automatic cut splitter. Retain existing line divisions while
+  // accepting the preset density for new lines and future explicit density edits.
+  result.overrides ||= {};
+  J.parseLyrics(current.lyrics).lines.forEach((line,index) => {
+    const ov = result.overrides[index] ||= {};
+    ov.divisionDensity ??= current.fx?.density ?? J.defaultProject().fx.density;
+  });
+  for (const key of settingKeys) if (settings[key] !== undefined) result[key] = settings[key];
+  for (const layer of ['media','foreground']) Object.assign(result[layer],settings[layer]);
+  // Existing cuts may still refer to fonts absent from the preset.
+  for (const key of ['userFonts','compositeFonts']) {
+    const imported = result[key] || [];
+    result[key] = [...(current[key] || []).filter(f => !imported.some(g => g.key === f.key)),...imported];
+  }
+  return result;
+};
 J.packProject = async (project, audioFile) => {
   const entries = [], parts = []; let offset = 0;
   const add = (kind, id, file, name) => {
