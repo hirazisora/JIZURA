@@ -1828,6 +1828,7 @@ function renderTech() {
       if (!J.randomOk(S.project, g, k)) { l.classList.add('set-off'); l.title += tbl[k].set ? J.mediaLabel('（演出セットがオフ）',' (Part set is off)') : tbl[k].extra && S.project.extra !== true ? '（追加分がオフのため、自動では選ばれません）' : '（和風の演出がオフのため、自動では選ばれません）'; }
       l.innerHTML = `<input type="checkbox" ${en[k] !== false ? 'checked' : ''}> ${escapeHtml(tbl[k].name)}${setBadges(tbl[k])}`;
       l.querySelector('input').addEventListener('change', e => { en[k] = e.target.checked; S.project.mood = null; d.querySelector('.tg-cnt').textContent = `${items.filter(x => en[x] !== false).length}/${items.length}`; replanSoon(60); });
+      l.appendChild(J.effectPreviewButton(g,k));
       list.appendChild(l);
     });
     d.querySelectorAll('.tg-tools button').forEach(b => b.addEventListener('click', () => {
@@ -2039,7 +2040,7 @@ function renderMediaEffects(layer) {
       row.querySelector('input').addEventListener('change', e => {
         const next = J.mediaEffectSettings(S.project, layer); next.enabled[key] = e.target.checked; S.project[layer].effects = next;
         section.querySelector('.tg-cnt').textContent = count(next.enabled); replan();
-      }); list.appendChild(row);
+      }); row.appendChild(J.effectPreviewButton('media',key,layer)); list.appendChild(row);
     }
     section.querySelectorAll('[data-media-group-action]').forEach(button => button.addEventListener('click', () => {
       const next = J.mediaEffectSettings(S.project, layer), action = button.dataset.mediaGroupAction;

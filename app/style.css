@@ -484,3 +484,9 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
 
 .lyric-input-tools { display:flex; flex-wrap:wrap; gap:5px; margin-top:7px; }
 .lyric-input-tools button { font-size:11px; padding:4px 7px; }
+
+.effect-preview-play { margin-left:auto; flex-shrink:0; padding:2px 7px; font-size:11px; }
+#effectPreviewDialog { width:min(740px,92vw); max-height:90vh; padding:20px; overflow:auto; }
+#effectPreviewDialog canvas { display:block; width:100%; aspect-ratio:16/9; background:#17171c; }
+#effectPreviewDialog h2 { font-size:16px; padding-right:32px; margin:0 0 14px; }
+.effect-preview-close { position:absolute; top:10px; right:10px; font-size:20px; }
