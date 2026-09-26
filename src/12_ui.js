@@ -249,7 +249,7 @@ function draw() {
   finally { previewCuts.forEach((cut, i) => { cut.area = previousAreas[i]; }); if (mediaCut) Object.assign(mediaCut, previousMedia); }
   const dt = performance.now() - t0;
   S.slow = S.playing ? (dt > 30 ? true : dt < 14 ? false : S.slow) : false;
-  updateTimeUI(); drawTimeline(); updateCutInfo();
+  updateTimeUI(); drawTimeline(); updateCutInfo(); drawItemFrames();
 }
 function tick(now) {
   requestAnimationFrame(tick);
@@ -653,7 +653,55 @@ function openCutDetails(layer,index,part=0) {
   }
   dialog.addEventListener('close',()=>dialog.remove());render();dialog.showModal();
 }
+// Preview controls are DOM overlays, so they never enter exported frames.
+let itemFrameSignature = '';
+function drawItemFrames() {
+  const overlay=$('itemFrames'), view=$('view').getBoundingClientRect(), host=$('viewport').getBoundingClientRect();
+  overlay.hidden=!$('showItemFrames').checked || !!S.areaEdit || !!S.exporting;
+  if(overlay.hidden) { itemFrameSignature=''; return; }
+  Object.assign(overlay.style,{left:`${view.left-host.left}px`,top:`${view.top-host.top}px`,width:`${view.width}px`,height:`${view.height}px`});
+  const items=[];
+  for(const layer of ['foreground','lyrics','media']) {
+    if(layer==='lyrics') {
+      for(const cut of J.lyricCutsAt(S.plan,S.t)) if(cut.line>=0) items.push({layer,cut,index:cut.line,area:cut.area||{x:0,y:0,w:1,h:1}});
+    } else {
+      const cut=J.mediaAt(S.plan,S.t,layer),asset=cut&&J.mediaAssets.get(cut.itemId),src=asset?.element;
+      if(!src)continue;
+      const sw=src.videoWidth||src.naturalWidth||src.width,sh=src.videoHeight||src.naturalHeight||src.height;
+      let area=J.mediaPlacementRect(cut.placement,sw,sh,S.plan.W,S.plan.H);
+      if(!area)continue;
+      if(!cut.placement && cut.layout==='cover') {const scale=Math.max(S.plan.W/sw,S.plan.H/sh);area={x:(1-sw*scale/S.plan.W)/2,y:(1-sh*scale/S.plan.H)/2,w:sw*scale/S.plan.W,h:sh*scale/S.plan.H};}
+      items.push({layer,cut,index:cut.index,area:{...area,angle:cut.placement?.angle||0}});
+    }
+  }
+  const L=J.mediaLabel,labels={dice:L('再抽選','Randomize'),lock:L('ロック','Lock'),area:L('表示範囲','Display area'),details:L('詳細編集','Edit details'),remove:L('削除','Delete'),frontmost:L('最前に表示','Frontmost')};
+  const layerNames={foreground:L('前景','Foreground'),lyrics:L('歌詞','Lyrics'),media:L('背景','Background')};
+  const occupied=[];
+  const html=items.map(({layer,cut,index,area})=>{
+    const locked=layer==='lyrics'?!!S.project.overrides[index]?.lock:!!mediaCutOptions(layer,index)?.lock;
+    const cx=(area.x+area.w/2)*view.width,cy=(area.y+area.h/2)*view.height,a=(area.angle||0)*Math.PI/180;
+    const points=[[-1,-1],[1,-1],[1,1],[-1,1]].map(([x,y])=>{x*=area.w*view.width/2;y*=area.h*view.height/2;return [cx+x*Math.cos(a)-y*Math.sin(a),cy+x*Math.sin(a)+y*Math.cos(a)];});
+    const actions=['dice','lock','area','details','remove',...(layer==='lyrics'?['frontmost']:[])];
+    const width=Math.min(view.width,actions.length*25+68),x=J.clamp(points[0][0],0,Math.max(0,view.width-width));
+    let y=J.clamp(points[0][1],0,Math.max(0,view.height-26));
+    while(occupied.some(r=>x<r.x+r.w && x+width>r.x && y<r.y+26 && y+26>r.y) && y+52<=view.height)y+=26;
+    occupied.push({x,y,w:width});
+    const controls=actions.map(action=>{
+      const active=action==='lock'?locked:action==='frontmost'?!!cut.frontmost:false;
+      return `<button type="button" class="item-frame-action ${active?'active':''}" data-action="${action}" data-layer="${layer}" data-index="${index}" data-part="${cut.part??0}" title="${labels[action]}" aria-label="${layerNames[layer]} ${labels[action]}" ${['lock','frontmost'].includes(action)?`aria-pressed="${active}"`:''} ${S.playing?'disabled':''}>${ICON[action]}</button>`;
+    }).join('');
+    return `<svg class="item-frame-outline ${layer}" width="100%" height="100%" aria-hidden="true"><polygon points="${points.map(p=>p.join(',')).join(' ')}"/></svg><div class="item-frame-tools ${layer}" style="left:${x}px;top:${y}px;max-width:${view.width}px" data-layer="${layer}"><span>${layerNames[layer]} ${index+1}</span>${controls}</div>`;
+  }).join('');
+  if(itemFrameSignature!==html){overlay.innerHTML=html;itemFrameSignature=html;}
+}
+function removeLyricCut(line,part) {
+  remember();
+  const key=`${line}:${part}`;
+  S.project.lyricCutOptions[key]={...S.project.lyricCutOptions[key],removed:true};
+  replan();
+}
 function performTimelineAction(control) {
+  if (control.classList.contains('item-frame-action') && S.playing) return;
   const layer = control.dataset.layer, index = +control.dataset.index;
   if (!Number.isInteger(index) || index < 0) return;
   if (control.dataset.action === 'details') { openCutDetails(layer,index,control.dataset.part === 'blank' ? 'blank' : +control.dataset.part || 0); return; }
@@ -667,7 +715,8 @@ function performTimelineAction(control) {
     return;
   }
   if (layer === 'lyrics') {
-    if (control.dataset.action === 'dice') rerollLyricLine(index);
+    if (control.dataset.action === 'remove') removeLyricCut(index,+control.dataset.part||0);
+    else if (control.dataset.action === 'dice') rerollLyricLine(index);
     else toggleLyricLineLock(index);
   } else if (layer === 'foreground' || layer === 'media') {
     if (control.dataset.action === 'dice') rerollMediaCut(layer, index);
@@ -2005,6 +2054,12 @@ function syncUI() {
 
 /* ---------------- wiring ---------------- */
 function bind() {
+  const frameToggle=$('showItemFrames');
+  $('showItemFramesLabel').textContent=J.mediaLabel('アイテム枠表示','Show item frames');
+  try {frameToggle.checked=localStorage.getItem('jizura.itemFrames')!=='false';}catch(e){}
+  frameToggle.addEventListener('change',()=>{try{localStorage.setItem('jizura.itemFrames',String(frameToggle.checked));}catch(e){}S.need=true;drawItemFrames();});
+  $('itemFrames').addEventListener('click',e=>{const button=e.target.closest('.item-frame-action');if(button&&!S.playing&&!S.areaEdit){e.stopPropagation();performTimelineAction(button);}});
+
   $('timelineLegend').innerHTML = [
     [ICON.dice,'再抽選','Reroll',''],
     [ICON.lock,'ロック','Lock',''],

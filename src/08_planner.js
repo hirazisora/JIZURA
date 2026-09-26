@@ -419,6 +419,7 @@ J.plan = (project, audio) => {
     }
     plan.events = plan.events.filter(event => event.t < plan.duration);
   }
+  plan.cuts = plan.cuts.filter(c => c.line < 0 || !project.lyricCutOptions?.[`${c.line}:${c.part}`]?.removed);
   plan.cuts.forEach((c, i) => { c.index = i; });
   plan.events.sort((a, b) => a.t - b.t);
   plan.energy = audio && audio.energy ? audio.energy : null;
