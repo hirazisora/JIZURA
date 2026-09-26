@@ -1318,9 +1318,20 @@ function syncSourceTab() {
   $('audioTimingSection').hidden = media;
   const targets = mediaLyricTargets(layer);
   $('mediaLyricInsertMode').value = media && m.lyricInsertMode === 'cut' ? 'cut' : 'line';
+  const sourceBox=$('backgroundInsertSources');sourceBox.hidden=layer!=='media';
+  if(layer==='media'){
+    const selected=m.insertSources || {files:true};
+    sourceBox.querySelectorAll('label').forEach(label=>label.remove());
+    for(const item of [{id:'files',name:J.mediaLabel('画像・動画','Images / videos')},...J.mediaCopyItems('media')]){
+      const label=document.createElement('label');label.className='check';
+      const input=document.createElement('input');input.type='checkbox';input.dataset.insertSource=item.id;input.checked=!!selected[item.id];
+      input.addEventListener('change',()=>{m.insertSources={...selected,[item.id]:input.checked};replan();});
+      label.append(input,document.createTextNode(item.name));sourceBox.append(label);
+    }
+  }
   $('btnMediaFromLyrics').disabled = !targets.length;
-  $('mediaLyricInsertHint').textContent = !media || !m.items.length
-    ? J.mediaLabel('画像・動画を追加すると使用できます。', 'Add images or videos to use this feature.')
+  $('mediaLyricInsertHint').textContent = !media || !J.mediaInsertChoices(S.project,layer).length
+    ? J.mediaLabel('挿入する項目を選択してください。画像・動画の場合は素材を追加してください。', 'Select items to insert. Add assets to insert images or videos.')
     : !targets.length
       ? J.mediaLabel('対象となる歌詞の行・カットがありません。', 'There are no lyric lines or cuts to align to.')
       : '';
@@ -1328,7 +1339,8 @@ function syncSourceTab() {
 function activeMediaLayer() { return S.sourceTab === 'foreground' ? 'foreground' : S.sourceTab === 'media' ? 'media' : null; }
 function mediaLyricTargets(layer) {
   const m = layer && S.project[layer];
-  if (!m || !m.items.length) return [];
+  const choices=J.mediaInsertChoices(S.project,layer);
+  if (!m || !choices.length) return [];
   // Cut mode includes every linkable lyric boundary, including blanks/interludes.
   let targets = S.plan.cuts.filter(cut => m.lyricInsertMode === 'cut' ? cut.line >= 0 || cut.blank : cut.line >= 0 && cut.part === 0);
   if (m.groupLyricsAsOneCut !== false) {
@@ -1340,7 +1352,7 @@ function mediaLyricTargets(layer) {
       seen.add(group); return true;
     });
   }
-  return targets.slice(0, m.loop ? 1000 : Math.min(1000, m.items.length));
+  return targets.slice(0, m.loop || choices.some(id=>id!=='files') ? 1000 : Math.min(1000, m.items.length));
 }
 function insertMediaFromLyrics() {
   const layer = activeMediaLayer();
@@ -1356,9 +1368,12 @@ function insertMediaFromLyrics() {
   m.cutOverrides = {};
   m.timing.lineTimes = {};
   S.project.timelineLinks = S.project.timelineLinks.filter(link => !link.a.startsWith(prefix) && !link.b.startsWith(prefix));
+  const choices=J.mediaInsertChoices(S.project,layer);let fileIndex=0;
   targets.forEach((cut, index) => {
-    // Keep upload order as the base assignment; the planner applies random order.
-    m.cutOverrides[index] = { itemId: m.items[index % m.items.length].id, technique: null };
+    const available=choices.filter(id=>id!=='files'||m.loop||fileIndex<m.items.length);
+    const choice=available[Math.floor(Math.random()*available.length)];
+    const itemId=choice==='files'?m.items[fileIndex++ % m.items.length].id:choice;
+    m.cutOverrides[index] = { itemId, technique: null };
     m.timing.lineTimes[index] = cut.start;
     // Keep linked inner boundaries fixed when the line start is moved later.
     if (m.lyricInsertMode === 'cut' && cut.line >= 0 && cut.part !== 0) S.project.timing.cutTimes[`${cut.line}:${cut.part}`] = cut.start;

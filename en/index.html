@@ -581,6 +581,7 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
         <p class="hint">Drop images or videos here, or use Add to select files. Files are stored in this browser.</p>
         <div id="mediaList" class="media-list"></div>
         <div id="mediaCutInsert" class="media-lyric-insert">
+          <fieldset id="backgroundInsertSources" hidden><legend>Items to insert in bulk</legend></fieldset>
           <div class="sec-h"><h2>Insert cuts</h2></div>
           <label class="field">Align inserted cuts to<select id="mediaLyricInsertMode"><option value="line">Lyric lines</option><option value="cut">Lyric cuts</option></select></label>
           <label class="check"><input id="mediaGroupLyrics" type="checkbox" checked><span>Treat lyrics enclosed in { } as one cut</span></label>
@@ -4289,8 +4290,8 @@ J.normalizeMedia = m => {
 };
 // Virtual sources refer to the current frame; no duplicated files or recursive background reads.
 J.mediaCopyItems = (layer='media') => layer !== 'media' ? [] : [
-  {id:'@copy:foreground-source',type:'copy',name:J.mediaLabel('Foregroundをコピー（素材のみ）','Copy foreground (source only)')},
-  {id:'@copy:foreground-render',type:'copy',name:J.mediaLabel('Foregroundをコピー（演出含む）','Copy foreground (with effects)')},
+  {id:'@copy:foreground-source',type:'copy',name:J.mediaLabel('Foregroundのコピー（素材のみ）','Copy foreground (source only)')},
+  {id:'@copy:foreground-render',type:'copy',name:J.mediaLabel('Foregroundのコピー（演出を含む）','Copy foreground (with effects)')},
   {id:'@copy:lyrics',type:'copy',name:J.mediaLabel('歌詞のコピー','Copy lyrics')},
 ];
 J.isMediaCopy = id => ['@copy:foreground-source','@copy:foreground-render','@copy:lyrics'].includes(id);
@@ -4430,6 +4431,13 @@ J.planMedia = (project, lyricPlan, audioDuration, layer = 'media') => {
     }
   }
   return { cuts, duration, applyLyricBackground: J.mediaEffectSettings(project, layer).applyLyricBackground !== false, blend: m.blend, opacity: m.opacity, randomOrder: m.randomOrder, loop: m.loop };
+};
+// Bulk insertion categories; copy sources do not require uploaded assets.
+J.mediaInsertChoices = (project,layer) => {
+  const m=project[layer];if(!m)return [];
+  if(layer!=='media')return m.items.length?['files']:[];
+  const selected=m.insertSources || {files:true};
+  return [...(selected.files && m.items.length?['files']:[]),...J.mediaCopyItems(layer).filter(item=>selected[item.id]).map(item=>item.id)];
 };
 J.mediaAt = (plan, t, layer = 'media') => plan[layer] && plan[layer].cuts.find(c => t >= c.start && t < c.end) || null;
 J.mediaVideoTime = (cut, t, duration) => {
@@ -38439,9 +38447,20 @@ function syncSourceTab() {
   $('audioTimingSection').hidden = media;
   const targets = mediaLyricTargets(layer);
   $('mediaLyricInsertMode').value = media && m.lyricInsertMode === 'cut' ? 'cut' : 'line';
+  const sourceBox=$('backgroundInsertSources');sourceBox.hidden=layer!=='media';
+  if(layer==='media'){
+    const selected=m.insertSources || {files:true};
+    sourceBox.querySelectorAll('label').forEach(label=>label.remove());
+    for(const item of [{id:'files',name:J.mediaLabel('画像 · 動画','Images / videos')},...J.mediaCopyItems('media')]){
+      const label=document.createElement('label');label.className='check';
+      const input=document.createElement('input');input.type='checkbox';input.dataset.insertSource=item.id;input.checked=!!selected[item.id];
+      input.addEventListener('change',()=>{m.insertSources={...selected,[item.id]:input.checked};replan();});
+      label.append(input,document.createTextNode(item.name));sourceBox.append(label);
+    }
+  }
   $('btnMediaFromLyrics').disabled = !targets.length;
-  $('mediaLyricInsertHint').textContent = !media || !m.items.length
-    ? J.mediaLabel('画像 · 動画をNewすると使用できます。', 'Add images or videos to use this feature.')
+  $('mediaLyricInsertHint').textContent = !media || !J.mediaInsertChoices(S.project,layer).length
+    ? J.mediaLabel('挿入する項目を選択してください。画像 · 動画の場合は素材をNewしてください。', 'Select items to insert. Add assets to insert images or videos.')
     : !targets.length
       ? J.mediaLabel('対象となる歌詞のline  · cutsがありません。', 'There are no lyric lines or cuts to align to.')
       : '';
@@ -38449,7 +38468,8 @@ function syncSourceTab() {
 function activeMediaLayer() { return S.sourceTab === 'foreground' ? 'foreground' : S.sourceTab === 'media' ? 'media' : null; }
 function mediaLyricTargets(layer) {
   const m = layer && S.project[layer];
-  if (!m || !m.items.length) return [];
+  const choices=J.mediaInsertChoices(S.project,layer);
+  if (!m || !choices.length) return [];
   // Cut mode includes every linkable lyric boundary, including blanks/interludes.
   let targets = S.plan.cuts.filter(cut => m.lyricInsertMode === 'cut' ? cut.line >= 0 || cut.blank : cut.line >= 0 && cut.part === 0);
   if (m.groupLyricsAsOneCut !== false) {
@@ -38461,7 +38481,7 @@ function mediaLyricTargets(layer) {
       seen.add(group); return true;
     });
   }
-  return targets.slice(0, m.loop ? 1000 : Math.min(1000, m.items.length));
+  return targets.slice(0, m.loop || choices.some(id=>id!=='files') ? 1000 : Math.min(1000, m.items.length));
 }
 function insertMediaFromLyrics() {
   const layer = activeMediaLayer();
@@ -38477,9 +38497,12 @@ function insertMediaFromLyrics() {
   m.cutOverrides = {};
   m.timing.lineTimes = {};
   S.project.timelineLinks = S.project.timelineLinks.filter(link => !link.a.startsWith(prefix) && !link.b.startsWith(prefix));
+  const choices=J.mediaInsertChoices(S.project,layer);let fileIndex=0;
   targets.forEach((cut, index) => {
-    // Keep upload order as the base assignment; the planner applies random order.
-    m.cutOverrides[index] = { itemId: m.items[index % m.items.length].id, technique: null };
+    const available=choices.filter(id=>id!=='files'||m.loop||fileIndex<m.items.length);
+    const choice=available[Math.floor(Math.random()*available.length)];
+    const itemId=choice==='files'?m.items[fileIndex++ % m.items.length].id:choice;
+    m.cutOverrides[index] = { itemId, technique: null };
     m.timing.lineTimes[index] = cut.start;
     // Keep linked inner boundaries fixed when the line start is moved later.
     if (m.lyricInsertMode === 'cut' && cut.line >= 0 && cut.part !== 0) S.project.timing.cutTimes[`${cut.line}:${cut.part}`] = cut.start;

@@ -94,8 +94,8 @@ J.normalizeMedia = m => {
 };
 // Virtual sources refer to the current frame; no duplicated files or recursive background reads.
 J.mediaCopyItems = (layer='media') => layer !== 'media' ? [] : [
-  {id:'@copy:foreground-source',type:'copy',name:J.mediaLabel('前景をコピー（素材のみ）','Copy foreground (source only)')},
-  {id:'@copy:foreground-render',type:'copy',name:J.mediaLabel('前景をコピー（演出含む）','Copy foreground (with effects)')},
+  {id:'@copy:foreground-source',type:'copy',name:J.mediaLabel('前景のコピー（素材のみ）','Copy foreground (source only)')},
+  {id:'@copy:foreground-render',type:'copy',name:J.mediaLabel('前景のコピー（演出を含む）','Copy foreground (with effects)')},
   {id:'@copy:lyrics',type:'copy',name:J.mediaLabel('歌詞のコピー','Copy lyrics')},
 ];
 J.isMediaCopy = id => ['@copy:foreground-source','@copy:foreground-render','@copy:lyrics'].includes(id);
@@ -235,6 +235,13 @@ J.planMedia = (project, lyricPlan, audioDuration, layer = 'media') => {
     }
   }
   return { cuts, duration, applyLyricBackground: J.mediaEffectSettings(project, layer).applyLyricBackground !== false, blend: m.blend, opacity: m.opacity, randomOrder: m.randomOrder, loop: m.loop };
+};
+// Bulk insertion categories; copy sources do not require uploaded assets.
+J.mediaInsertChoices = (project,layer) => {
+  const m=project[layer];if(!m)return [];
+  if(layer!=='media')return m.items.length?['files']:[];
+  const selected=m.insertSources || {files:true};
+  return [...(selected.files && m.items.length?['files']:[]),...J.mediaCopyItems(layer).filter(item=>selected[item.id]).map(item=>item.id)];
 };
 J.mediaAt = (plan, t, layer = 'media') => plan[layer] && plan[layer].cuts.find(c => t >= c.start && t < c.end) || null;
 J.mediaVideoTime = (cut, t, duration) => {

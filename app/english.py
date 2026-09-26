@@ -357,6 +357,7 @@ def replace_copy(source, glossary):
 # Fork UI text is translated before the original glossary so short common
 # words such as 歌詞 and 追加 cannot split a longer fork label in half.
 FORK_BODY = {
+    '一括挿入する項目': 'Items to insert in bulk',
     '注釈レイアウトの小さな文字（対応している演出のみ）': 'Smaller text in annotation layouts (supported effects only)',
     '歌詞入力補助': 'Lyric input tools',
     '>重ねず1シーン</button>': '>Non-overlapping scene</button>',
