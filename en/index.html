@@ -37137,7 +37137,8 @@ const ICON = {
   area: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="12" height="10"/><path d="M2 6h12M5 3v10"/></svg>',
   remove: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m4 4 8 8m0-8-8 8"/></svg>',
 
-  dice: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2" y="2" width="12" height="12" rx="2"/><circle cx="5.5" cy="5.5" r="1" fill="currentColor"/><circle cx="10.5" cy="10.5" r="1" fill="currentColor"/><circle cx="10.5" cy="5.5" r="1" fill="currentColor"/><circle cx="5.5" cy="10.5" r="1" fill="currentColor"/></svg>',
+  dice: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12.8 5.3A5.3 5.3 0 1 0 13.2 10M12.8 1.8v3.8H9"/></svg>',
+  disableReroll: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3.3A5 5 0 1 0 12.7 9M10 1v3.5H6.5"/><path d="M11.5 2h3.5" stroke="#ff5364" stroke-width="2.2"/></svg>',
   lock: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="3" y="7" width="10" height="7" rx="1.5"/><path d="M5 7V5a3 3 0 0 1 6 0v2"/></svg>',
   frontmost: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2" y="5" width="10" height="8" rx="1"/><path d="M5 2h9v8M8 4l2 2 2-2"/></svg>',
 };
@@ -37585,6 +37586,44 @@ function rerollLyricLine(index) {
   setOv(index, { seed: (current.seed | 0) + 1, lock: false });
   replan(); seek(line.start + 0.001);
 }
+function disableAndReroll(layer,index,part=null) {
+  const project=S.project;
+  if(layer==='lyrics'){
+    const cuts=S.plan.cuts.filter(c=>c.line===index && Number.isInteger(c.part) && (part==null || c.part===part));
+    if(!cuts.length)return;
+    for(const cut of cuts){
+      for(const group of ['layout','enter','hold','exit','treat','bg','cam','trans']){
+        const key=cut[group];if(key && Object.hasOwn(J.registry(group),key))(project.enabled[group] ||= {})[key]=false;
+      }
+      for(const decor of cut.decor || [])(project.enabled.decor ||= {})[decor.id]=false;
+      for(const event of S.plan.events.filter(e=>e.cutOwner===`${cut.line}:${cut.part}`))(project.enabled.fx ||= {})[event.type]=false;
+    }
+    // Line-wide reroll must not retain explicit choices that override the pool.
+    const ov=project.overrides[index] ||= {};
+    for(const key of ['layout','enter','hold','exit','treat','bg','cam','trans','decor'])delete ov[key];
+    for(const [key,options] of Object.entries(project.lyricCutOptions || {}))if(key.startsWith(`${index}:`) && options.details){
+      options.details=Object.fromEntries(Object.entries(options.details).filter(([field])=>['text','area'].includes(field)));
+      delete options.pastedEffects;
+    }
+    rerollLyricLine(index);renderTech();
+  }else{
+    const cut=S.plan[layer]?.cuts[index];if(!cut)return;
+    const settings=J.mediaEffectSettings(project,layer);
+    for(const key of [cut.technique,cut.entrance,cut.departure])if(J.MEDIA_TECH[key])settings.enabled[key]=false;
+    project[layer].effects=settings;
+    const options=mediaCutOptions(layer,index);
+    const patch={technique:null,entrance:null,departure:null,details:undefined};
+    for(const key of ['layout','enter','hold','exit','treat','trans','effectSettings'])patch[key]=undefined;
+    // Override any asset-wide legacy choices for this cut without changing its placement.
+    project[layer].cutOverrides[index]={...options,...patch};
+    rerollMediaCut(layer,index);renderMediaEffects(layer);
+  }
+}
+function disableRerollButton(layer,index,part=null){
+  const button=document.createElement('button');button.type='button';button.className='icon ghost disable-reroll';
+  button.title=J.mediaLabel('OFFにして再抽選','Disable current effects and randomize');button.setAttribute('aria-label',button.title);button.innerHTML=ICON.disableReroll;
+  button.addEventListener('click',()=>disableAndReroll(layer,index,part));return button;
+}
 function toggleLyricLineLock(index) {
   const line = S.plan.lines[index]; if (!line) return;
   const current = S.project.overrides[index] || {};
@@ -37827,14 +37866,14 @@ function drawItemFrames() {
       items.push({layer,cut,index:cut.index,area:{...area,angle:cut.placement?.angle||0}});
     }
   }
-  const L=J.mediaLabel,labels={copy:L('Effectsをコピー','Copy effects'),paste:L('Effectsをペースト','Paste effects'),dice:L('再抽選','Randomize'),lock:L('ロック','Lock'),area:L('表示範囲','Display area'),details:L('詳細編集','Edit details'),remove:L('削除','Delete'),frontmost:L('Show above foreground','Frontmost')};
+  const L=J.mediaLabel,labels={copy:L('Effectsをコピー','Copy effects'),paste:L('Effectsをペースト','Paste effects'),dice:L('再抽選','Randomize'),disableReroll:L('OFFにして再抽選','Disable current effects and randomize'),lock:L('ロック','Lock'),area:L('表示範囲','Display area'),details:L('詳細編集','Edit details'),remove:L('削除','Delete'),frontmost:L('Show above foreground','Frontmost')};
   const layerNames={foreground:L('Foreground','Foreground'),lyrics:L('歌詞','Lyrics'),media:L('Background','Background')};
   const occupied=[];
   const html=items.map(({layer,cut,index,area})=>{
     const locked=layer==='lyrics'?!!S.project.overrides[index]?.lock:!!mediaCutOptions(layer,index)?.lock;
     const cx=(area.x+area.w/2)*view.width,cy=(area.y+area.h/2)*view.height,a=(area.angle||0)*Math.PI/180;
     const points=[[-1,-1],[1,-1],[1,1],[-1,1]].map(([x,y])=>{x*=area.w*view.width/2;y*=area.h*view.height/2;return [cx+x*Math.cos(a)-y*Math.sin(a),cy+x*Math.sin(a)+y*Math.cos(a)];});
-    const actions=['dice','lock','area','details','copy','paste','remove',...(layer==='lyrics'?['frontmost']:[])];
+    const actions=['dice','disableReroll','lock','area','details','copy','paste','remove',...(layer==='lyrics'?['frontmost']:[])];
     const width=Math.min(view.width,actions.length*25+68),x=J.clamp(points[0][0],0,Math.max(0,view.width-width));
     let y=J.clamp(points[0][1],0,Math.max(0,view.height-26));
     while(occupied.some(r=>x<r.x+r.w && x+width>r.x && y<r.y+26 && y+26>r.y) && y+52<=view.height)y+=26;
@@ -37857,6 +37896,7 @@ function performTimelineAction(control) {
   if (control.classList.contains('item-frame-action') && S.playing) return;
   const layer = control.dataset.layer, index = +control.dataset.index;
   if (!Number.isInteger(index) || index < 0) return;
+  if(control.dataset.action==='disableReroll'){disableAndReroll(layer,index,control.dataset.part==null?null:+control.dataset.part);return;}
   if (['copy','paste'].includes(control.dataset.action)) { effectClipboardAction(control.dataset.action,layer,index,+control.dataset.part||0); return; }
   if (control.dataset.action === 'details') { openCutDetails(layer,index,control.dataset.part === 'blank' ? 'blank' : +control.dataset.part || 0); return; }
   if (control.dataset.action === 'area') {
@@ -37904,7 +37944,7 @@ function drawTimelineLinks() {
     const canvas = $(layer === 'lyrics' ? 'timeline' : layer === 'foreground' ? 'foregroundTimeline' : 'mediaTimeline');
     const startX = canvas.offsetLeft + cut.start / Math.max(0.001, S.plan.duration) * canvas.clientWidth;
     const y = canvas.offsetTop + 11;
-    const actions = [['dice', false, layer === 'lyrics' ? 'Reroll this line' : 'Reroll this cut', ICON.dice], ['lock', locked, layer === 'lyrics' ? 'Lock this line' : 'Lock this cut', ICON.lock]];
+    const actions = [['dice', false, layer === 'lyrics' ? 'Reroll this line' : 'Reroll this cut', ICON.dice], ['disableReroll',false,J.mediaLabel('OFFにして再抽選','Disable current effects and randomize'),ICON.disableReroll], ['lock', locked, layer === 'lyrics' ? 'Lock this line' : 'Lock this cut', ICON.lock]];
     if (layer === 'lyrics' || J.mediaSourceAvailable(cut)) actions.push(['area', false, layer === 'lyrics' ? 'Edit this line display area' : 'Edit this cut position and size', ICON.area]);
     if (layer !== 'lyrics') actions.push(['details', false, J.mediaLabel('cutsの詳細編集','Edit cut details'), ICON.details]);
     if (layer !== 'lyrics') for(const name of ['copy','paste'])actions.push([name,false,name==='copy'?J.mediaLabel('Effectsをコピー','Copy effects'):J.mediaLabel('Effectsをペースト','Paste effects'),ICON[name]]);
@@ -38216,6 +38256,7 @@ function renderLines() {
     li.querySelector('.lyric-area-thumb').addEventListener('click', () => openAreaEditor(i));
     li.querySelector('select').addEventListener('change', e => { setOv(i, { layout: e.target.value || undefined }); replan(); });
     li.querySelector('.dice').addEventListener('click', () => rerollLyricLine(i));
+    li.querySelector('.dice').after(disableRerollButton('lyrics',i));
     li.querySelector('.lock').addEventListener('click', () => toggleLyricLineLock(i));
     const cutsEl = li.querySelector('.cuts');
     S.plan.cuts.filter(c => c.line === i && J.LAYOUTS[c.layout] && !J.LAYOUTS[c.layout].special).forEach(c => {
@@ -38635,6 +38676,7 @@ function renderMediaLines() {
       li.querySelector('.media-chroma-color').addEventListener('change', e => { mediaOv(i, { chromaColor: e.target.value }); replan(); });
     }
     li.querySelector('.dice').addEventListener('click', () => rerollMediaCut(layer, i));
+    li.querySelector('.dice').after(disableRerollButton(layer,i));
     li.querySelector('.tools').insertBefore(detailButton(() => openCutDetails(layer,i)), li.querySelector('.remove-media-cut'));
     li.querySelector('.tools').append(...effectClipboardButtons(layer,i));
     li.querySelector('.lock').addEventListener('click', () => toggleMediaCutLock(layer, i));
@@ -39231,6 +39273,7 @@ function bind() {
 
   $('timelineLegend').innerHTML = [
     [ICON.dice,'再抽選','Reroll',''],
+    [ICON.disableReroll,'OFFにして再抽選','Disable current effects and randomize',''],
     [ICON.lock,'ロック','Lock',''],
     [ICON.area,'表示範囲','Display area',''],
     [ICON.details,'詳細編集','Edit details',''],
