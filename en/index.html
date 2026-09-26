@@ -37927,6 +37927,18 @@ function removeLyricCut(line,part) {
   S.project.lyricCutOptions[key]={...S.project.lyricCutOptions[key],removed:true};
   replan();
 }
+function setMediaCutAsset(layer,index,itemId) {
+  if(S.exporting || S.tap)return;
+  const m=S.project[layer];
+  // Freeze the displayed order before switching from shuffled to manual selection.
+  if(m.randomOrder){
+    for(const cut of S.plan[layer].cuts)mediaOv(cut.index,{itemId:cut.itemId || null},layer);
+    m.randomOrder=false;
+  }
+  const ov=mediaCutOptions(layer,index);
+  mediaOv(index,{itemId,...(ov?.lock?{lockedItemId:itemId}:{})},layer);
+  replan();
+}
 function drawTimelineAssetSelects() {
   const stack=$('timelineStack');
   let overlay=$('timelineAssets');
@@ -37947,17 +37959,15 @@ function drawTimelineAssetSelects() {
         select.addEventListener('pointerdown',e=>{e.stopPropagation();pause();});
         select.addEventListener('keydown',e=>e.stopPropagation());
         select.addEventListener('change',()=>{
-          if(S.exporting || S.tap || S.project[layer].randomOrder)return;
-          const index=+select.dataset.index,ov=mediaCutOptions(layer,index),itemId=select.value || null;
-          mediaOv(index,{itemId,...(ov?.lock?{lockedItemId:itemId}:{})},layer);replan();
+          setMediaCutAsset(layer,+select.dataset.index,select.value || null);
         });
         overlay.append(select);
       }
       // Preserve native dropdown state and focus across timeline redraws.
       if(select._options!==options){select.innerHTML=options;select._options=options;}
       if(select.value!==(cut.itemId || ''))select.value=cut.itemId || '';
-      select.disabled=!!(m.randomOrder || S.exporting || S.tap);
-      select.title=m.randomOrder?J.mediaLabel('素材を指定するにはRandom順をオフにしてください','Turn off random order to select a file'):cut.name;
+      select.disabled=!!(S.exporting || S.tap);
+      select.title=m.randomOrder?J.mediaLabel('素材を変更すると現在の並びでRandom順をオフにします','Changing the asset turns off random order and keeps the current order'):cut.name;
       select.setAttribute('aria-label',`${J.mediaLabel(layer==='foreground'?'Foreground':'Background',layer==='foreground'?'Foreground':'Background')} ${cut.index+1}: ${J.mediaLabel('素材を変更','Change asset')}`);
       select.style.left=`${canvas.offsetLeft+cut.start/duration*canvas.clientWidth+5}px`;
       select.style.top=`${canvas.offsetTop+22}px`;select.style.width=`${width}px`;
@@ -38726,7 +38736,7 @@ function renderMediaLines() {
   S.plan[layer].cuts.forEach((cut, i) => {
     addButton(i);
     const item = [...m.items,...J.mediaCopyItems(layer)].find(x => x.id === cut.itemId), ov = Object.assign({}, m.overrides[cut.itemId] || {}, m.cutOverrides[i] || {});
-    const fileSelect = `<select class="media-cut-file" ${m.randomOrder ? `disabled title="${J.mediaLabel('素材を指定するにはRandom順をオフにしてください', 'Turn off random order to select a file')}"` : ''} aria-label="File for cut ${i + 1}"><option value="">No image</option>${[...J.mediaCopyItems(layer),...m.items].map(asset => `<option value="${escapeHtml(asset.id)}" ${cut.itemId === asset.id ? 'selected' : ''}>${escapeHtml(asset.name)}</option>`).join('')}</select>`;
+    const fileSelect = `<select class="media-cut-file" ${m.randomOrder ? `title="${J.mediaLabel('素材を変更すると現在の並びでRandom順をオフにします', 'Changing the asset turns off random order and keeps the current order')}"` : ''} aria-label="File for cut ${i + 1}"><option value="">No image</option>${[...J.mediaCopyItems(layer),...m.items].map(asset => `<option value="${escapeHtml(asset.id)}" ${cut.itemId === asset.id ? 'selected' : ''}>${escapeHtml(asset.name)}</option>`).join('')}</select>`;
     if (ov.layout === 'stretch') ov.layout = 'cover';
     for (const key of ['layout', 'enter', 'hold', 'exit', 'treat']) if (ov[key] === undefined) ov[key] = cut[key];
     const asset = J.mediaAssets.get(cut.itemId), source = asset && asset.element;
@@ -38749,7 +38759,7 @@ function renderMediaLines() {
     compositing.querySelector('input').addEventListener('change',e=>{mediaOv(i,{opacity:J.clamp(+e.target.value||0,0,100)},layer);replan();});
     li.querySelector('.meta').append(compositing);
     li.querySelector('.time').addEventListener('change', e => { m.timing.lineTimes[i] = Math.max(0, parseFloat(e.target.value) || 0); replan(); });
-    li.querySelector('.media-cut-file').addEventListener('change', e => { mediaOv(i, { itemId: e.target.value || null, ...(ov.lock?{lockedItemId:e.target.value||null}:{}) }, layer); replan(); });
+    li.querySelector('.media-cut-file').addEventListener('change', e => setMediaCutAsset(layer,i,e.target.value || null));
     li.querySelector('.media-technique').addEventListener('change', e => { if (e.target.value !== 'legacy') { mediaOv(i, { technique: e.target.value || null, lock: false, lockedTechnique: undefined }, layer); replan(); } });
     const videoLoop = li.querySelector('.media-video-loop input');
     if (videoLoop) videoLoop.addEventListener('change', e => { mediaOv(i, { videoLoop: e.target.checked }); replan(); });
