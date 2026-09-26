@@ -32,6 +32,7 @@ const onCol = (sc, plate) => {
 /* secondary line of copy: lineText when it differs, otherwise romaji / note */
 const altCopy = env => {
   const c = env.cut;
+  if (c.note) return c.note;
   if (c.lineText && strip(c.lineText) !== strip(c.text)) return c.lineText;
   return c.note || romajiOf(env) || 'No.' + lineNo(env);
 };

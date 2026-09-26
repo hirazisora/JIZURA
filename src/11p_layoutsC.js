@@ -31,12 +31,14 @@ const romaOfText = t => { if (hasLatin(t) || !t) return null; const r = J.romaji
 const romajiOf = env => romaOfText(env.cut.text);
 const altCopy = env => {
   const c = env.cut;
+  if (c.note) return c.note;
   if (c.lineText && strip(c.lineText) !== strip(c.text)) return flat(c.lineText);
   return c.note || romajiOf(env) || 'No.' + lineNo(env);
 };
 /* real secondary copy only (null when the cut is the whole line and has no reading) */
 const deckCopy = env => {
   const c = env.cut;
+  if (c.note) return c.note;
   if (c.lineText && strip(c.lineText) !== strip(c.text)) return flat(c.lineText);
   return c.note || romajiOf(env) || null;
 };

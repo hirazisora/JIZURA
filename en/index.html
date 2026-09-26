@@ -3803,7 +3803,7 @@ J.plan = (project, audio) => {
       const emph = ln.impact && (k === 0 || u.recap) || emphasis;
       const fx = suppressed ? Object.assign({}, plan.fx, { motion: plan.fx.motion * 0.25, glitch: plan.fx.glitch * 0.25, decor: plan.fx.decor * 0.4 }) : plan.fx;
       const eventStart = plan.events.length;
-      const layout = ln.effectsOnly || txt.includes('\n') ? 'center' : ov.layout && J.LAYOUTS[ov.layout] ? ov.layout : pickLayout(rng, st, en, nn, dur, history, emph, u.recap, layoutH > layoutW);
+      const layout = ln.effectsOnly || txt.includes('\n') ? 'center' : ov.layout && J.LAYOUTS[ov.layout] ? ov.layout : pickLayout(rng, st, en, nn, dur, history, emph, u.recap, layoutH > layoutW, ln.note);
       let enter = ov.enter && J.ENTER[ov.enter] ? ov.enter : pickEnter(rng, st, en, layout, dur, history, emph, nn);
       let exit = ov.exit && J.EXIT[ov.exit] ? ov.exit : pickExit(rng, st, en, layout, dur, k === units.length - 1, history);
       const hold = ov.hold && J.HOLD[ov.hold] ? ov.hold : pickHold(rng, en, fx, history);
@@ -3843,6 +3843,12 @@ J.plan = (project, audio) => {
           enter = 'cut'; inDur = 0.12;
           prevCut.exit = 'cut'; prevCut.outDur = 0;
         }
+      }
+      // Avoid optional variants that hide a supplied annotation on automatic layouts.
+      if (ln.note && !ov.layout) {
+        if (layout==='labels') params.vertNote=false;
+        if (layout==='lowerThird') params.label='copy';
+        if (layout==='arcTop') params.under='copy';
       }
       const cut = makeCut({ text: txt, effectsOnly: !!ln.effectsOnly, lineText: ln.text, note: ln.note, line: li, part: k, group: ln.group, avoidOverlap: !!ln.avoidOverlap, start: cs, end: ce, layout, enter, exit, hold, inDur, outDur, params, decor, scheme: sch, seed: J.h(lineSeed, k, 17), area, frontmost: !!frontmost, emphasis, suppressed, motionScale: suppressed ? 0.25 : 1, contentScale: suppressed ? 0.7 : 1, emph, recap: !!u.recap, words: J.chunkText(txt), stagger: rng.range(0.025, 0.06),
         treat, treatP, bg, bgP: bg === lineBg ? lineBgP : {}, cam, camP, trans, transP, transDur });
@@ -3939,7 +3945,7 @@ function novelty(history, key, val) {
   return w;
 }
 const PORTRAIT_W = { vcols: 1.9, condensed: 1.3, huge: 1.3, center: 1.2, stack: 1.1, mixed: 0.7, marquee: 0.6, wave: 0.6, diag: 0.8, type: 0.8, gloss: 0.5 };
-function pickLayout(rng, st, en, n, dur, history, emph, recap, portrait) {
+function pickLayout(rng, st, en, n, dur, history, emph, recap, portrait, note) {
   const cands = [];
   for (const k of J.LAYOUT_ORDER) {
     const L = J.LAYOUTS[k];
@@ -3954,7 +3960,8 @@ function pickLayout(rng, st, en, n, dur, history, emph, recap, portrait) {
     cands.push([k, w]);
   }
   if (!cands.length) return 'center';
-  return rng.wpick(cands);
+  const withNote=note ? cands.filter(([key])=>J.LAYOUTS[key].supportsNote) : [];
+  return rng.wpick(withNote.length ? withNote : cands);
 }
 const LAYOUT_ENTER = {
   type: { type: 4, scramble: 1.5 }, ring: { pop: 2, spin: 2, cut: 1, assemble: 0.4, slice: 0.2, wipe: 0.2 }, labels: { cut: 3, pop: 1 },
@@ -21842,6 +21849,7 @@ const onCol = (sc, plate) => {
 /* secondary line of copy: lineText when it differs, otherwise romaji / note */
 const altCopy = env => {
   const c = env.cut;
+  if (c.note) return c.note;
   if (c.lineText && strip(c.lineText) !== strip(c.text)) return c.lineText;
   return c.note || romajiOf(env) || 'No.' + lineNo(env);
 };
@@ -25647,12 +25655,14 @@ const romaOfText = t => { if (hasLatin(t) || !t) return null; const r = J.romaji
 const romajiOf = env => romaOfText(env.cut.text);
 const altCopy = env => {
   const c = env.cut;
+  if (c.note) return c.note;
   if (c.lineText && strip(c.lineText) !== strip(c.text)) return flat(c.lineText);
   return c.note || romajiOf(env) || 'No.' + lineNo(env);
 };
 /* real secondary copy only (null when the cut is the whole line and has no reading) */
 const deckCopy = env => {
   const c = env.cut;
+  if (c.note) return c.note;
   if (c.lineText && strip(c.lineText) !== strip(c.text)) return flat(c.lineText);
   return c.note || romajiOf(env) || null;
 };
@@ -36889,6 +36899,14 @@ J.effectPreviewButton=(group,key,layer='lyrics')=>{
   button.title=J.mediaLabel('プレビューを再生','Play preview');button.setAttribute('aria-label',button.title);
   button.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();J.openEffectPreview(group,key,layer);});return button;
 };
+})();
+
+/* Layouts with a dedicated supplied-note/secondary-copy rendering path. */
+(() => {
+'use strict';
+for (const key of ['labels','lowerThird','arcTop','magazine','headlineDeck','poster','dictionary','newspaper','letterPaper','crossword']) {
+  if (J.LAYOUTS[key]) J.LAYOUTS[key].supportsNote=true;
+}
 })();
 
 /* English labels are applied after all expression packs register, before the editor starts.
