@@ -195,7 +195,7 @@ J.planMedia = (project, lyricPlan, audioDuration, layer = 'media') => {
       cut.transP = registry[trans] && registry[trans].plan ? registry[trans].plan(rng, lyricPlan.style) : {};
     }
   }
-  return { cuts, duration, blend: m.blend, opacity: m.opacity, randomOrder: m.randomOrder, loop: m.loop };
+  return { cuts, duration, applyLyricBackground: J.mediaEffectSettings(project, layer).applyLyricBackground !== false, blend: m.blend, opacity: m.opacity, randomOrder: m.randomOrder, loop: m.loop };
 };
 J.mediaAt = (plan, t, layer = 'media') => plan[layer] && plan[layer].cuts.find(c => t >= c.start && t < c.end) || null;
 J.mediaVideoTime = (cut, t, duration) => {

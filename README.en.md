@@ -76,3 +76,7 @@ For local preview run `python preview_server.py` and open `http://127.0.0.1:8765
 **Project** contains New, Open and Save. **Export** contains MP4, PNG sequence ZIP, transparent PNG ZIP, and AE arrangement data. MP4/PNG open a settings dialog sharing the settings in Advanced → Export. MP4 includes quality and audio settings; PNG shows the applicable image settings. Start export, monitor progress and cancel from the dialog.
 
 Set **File name** in the export dialog for MP4, PNG sequence ZIP and transparent PNG ZIP. Project Save and Export for AE also ask for a name. Extensions are added automatically without duplication. Blank names fall back to the song title; unsupported filename characters are replaced.
+
+### Effects-only lyrics and offscreen areas
+
+Enter `｜   ｜` (spaces between full-width vertical bars) to create a timed lyric line with effects but no text. Standard timing and boundary linking remain available. Lyric display areas can extend beyond the canvas and reach 400% in width and height. Advanced → Background → Apply lyric background effects is on by default and also draws lyric background graphics over uploaded background media.

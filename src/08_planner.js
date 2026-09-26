@@ -83,6 +83,8 @@ J.parseLyrics = (raw) => {
       return match;
     });
     s = plain + s.slice(pos);
+    const effectsOnly = /^｜[ \t\u3000]+｜$/.test(s);
+    if (effectsOnly) s = s.slice(1, -1);
     let manual = null;
     if (s.includes('/')) {
       manual = s.split('/').map(x => restoreLyricEscapes(x.trim())).filter(Boolean);
@@ -92,7 +94,7 @@ J.parseLyrics = (raw) => {
     const lineGroup = group;
     if (closeGroup) group = null;
     if (!s) continue;
-    const base = { text: restoreLyricEscapes(s), note, impact, emph, soft, strengthSpans, manual, group: lineGroup, gapBefore: pendingGap };
+    const base = { text: restoreLyricEscapes(s), effectsOnly, note, impact, emph, soft, strengthSpans, manual, group: lineGroup, gapBefore: pendingGap };
     pendingGap = false;
     if (times.length) times.forEach(t => lines.push(Object.assign({}, base, { lrc: t })));
     else lines.push(Object.assign({}, base, { lrc: null }));
@@ -202,8 +204,8 @@ J.computeTiming = (project, parsed, audio) => {
 const wkey = (obj, k, d = 1) => (obj && obj[k] != null ? obj[k] : d);
 J.lyricArea = area => {
   if (!area || !['x', 'y', 'w', 'h'].every(k => Number.isFinite(+area[k]))) return null;
-  const w = J.clamp(+area.w, 0.04, 1), h = J.clamp(+area.h, 0.04, 1);
-  return { x: J.clamp(+area.x, 0, 1 - w), y: J.clamp(+area.y, 0, 1 - h), w, h,
+  const w = J.clamp(+area.w, 0.04, 4), h = J.clamp(+area.h, 0.04, 4);
+  return { x: +area.x, y: +area.y, w, h,
     angle: Number.isFinite(+area.angle) ? J.clamp(+area.angle, -180, 180) : 0,
     lockAspect: area.lockAspect !== false };
 };
@@ -266,8 +268,8 @@ J.plan = (project, audio) => {
     const n = [...ln.text.replace(/\s+/g, '')].length;
     const cutTimes = (project.timing && project.timing.cutTimes) || {};
     const interludeTime = cutTimes[`${li}:interlude`];
-    const naturalVisEnd = Math.min(e, s + Math.max(3.6, n * 0.5 + 1.2));
-    const visEnd = interludeTime != null && Number.isFinite(+interludeTime) && e - s > 1.81
+    const naturalVisEnd = ln.effectsOnly ? e : Math.min(e, s + Math.max(3.6, n * 0.5 + 1.2));
+    const visEnd = ln.effectsOnly ? e : interludeTime != null && Number.isFinite(+interludeTime) && e - s > 1.81
       ? J.clamp(+interludeTime, s + 0.5, e - 1.31) : naturalVisEnd;
     const D = visEnd - s;
     plan.lines.push({ index: li, text: ln.text, start: s, end: e, visEnd, note: ln.note, impact: ln.impact, emph: ln.emph, soft: ln.soft, group: ln.group, chunks: null, seed: lineSeed });
@@ -314,7 +316,7 @@ J.plan = (project, audio) => {
       const emph = ln.impact && (k === 0 || u.recap) || emphasis;
       const fx = suppressed ? Object.assign({}, plan.fx, { motion: plan.fx.motion * 0.25, glitch: plan.fx.glitch * 0.25, decor: plan.fx.decor * 0.4 }) : plan.fx;
       const eventStart = plan.events.length;
-      const layout = txt.includes('\n') ? 'center' : ov.layout && J.LAYOUTS[ov.layout] ? ov.layout : pickLayout(rng, st, en, nn, dur, history, emph, u.recap, layoutH > layoutW);
+      const layout = ln.effectsOnly || txt.includes('\n') ? 'center' : ov.layout && J.LAYOUTS[ov.layout] ? ov.layout : pickLayout(rng, st, en, nn, dur, history, emph, u.recap, layoutH > layoutW);
       let enter = ov.enter && J.ENTER[ov.enter] ? ov.enter : pickEnter(rng, st, en, layout, dur, history, emph, nn);
       let exit = ov.exit && J.EXIT[ov.exit] ? ov.exit : pickExit(rng, st, en, layout, dur, k === units.length - 1, history);
       const hold = ov.hold && J.HOLD[ov.hold] ? ov.hold : pickHold(rng, en, fx, history);
@@ -355,7 +357,7 @@ J.plan = (project, audio) => {
           prevCut.exit = 'cut'; prevCut.outDur = 0;
         }
       }
-      const cut = makeCut({ text: txt, lineText: ln.text, note: ln.note, line: li, part: k, group: ln.group, start: cs, end: ce, layout, enter, exit, hold, inDur, outDur, params, decor, scheme: sch, seed: J.h(lineSeed, k, 17), area, frontmost: !!frontmost, emphasis, suppressed, motionScale: suppressed ? 0.25 : 1, contentScale: suppressed ? 0.7 : 1, emph, recap: !!u.recap, words: J.chunkText(txt), stagger: rng.range(0.025, 0.06),
+      const cut = makeCut({ text: txt, effectsOnly: !!ln.effectsOnly, lineText: ln.text, note: ln.note, line: li, part: k, group: ln.group, start: cs, end: ce, layout, enter, exit, hold, inDur, outDur, params, decor, scheme: sch, seed: J.h(lineSeed, k, 17), area, frontmost: !!frontmost, emphasis, suppressed, motionScale: suppressed ? 0.25 : 1, contentScale: suppressed ? 0.7 : 1, emph, recap: !!u.recap, words: J.chunkText(txt), stagger: rng.range(0.025, 0.06),
         treat, treatP, bg, bgP: bg === lineBg ? lineBgP : {}, cam, camP, trans, transP, transDur });
       plan.cuts.push(cut);
       history.push({ layout, enter, exit, hold, treat, cam, trans, decor: decor.map(d => d.id) });

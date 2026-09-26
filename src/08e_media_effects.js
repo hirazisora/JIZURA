@@ -53,7 +53,7 @@ for (const [key, ja, en] of [
 ]) add('transition_' + key, ja, en, 'transition', 'fade', 'still', 'fade', 'none', key);
 J.mediaEffectSettings = (p, layer = 'media') => {
   // Projects saved before the layer split have one shared mediaEffects object.
-  const settings = Object.assign({ motion: 1, treatment: 1, duration: 0.45, autoPlacement: true, sizeMin: 75, sizeMax: 125, enabled: {} }, p[layer]?.effects || p.mediaEffects || {});
+  const settings = Object.assign({ motion: 1, treatment: 1, duration: 0.45, autoPlacement: true, applyLyricBackground: true, sizeMin: 75, sizeMax: 125, enabled: {} }, p[layer]?.effects || p.mediaEffects || {});
   for (const [key, min, max, fallback] of [['motion', 0, 2, 1], ['treatment', 0, 1, 1], ['duration', .05, 1.5, .45]]) settings[key] = Number.isFinite(+settings[key]) ? J.clamp(+settings[key], min, max) : fallback;
   const sizeMin = Number.isFinite(+settings.sizeMin) ? J.clamp(+settings.sizeMin, 0, 500) : 75;
   const sizeMax = Number.isFinite(+settings.sizeMax) ? J.clamp(+settings.sizeMax, 0, 500) : 125;

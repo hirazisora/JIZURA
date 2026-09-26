@@ -334,6 +334,7 @@ def replace_copy(source, glossary):
 # Fork UI text is translated before the original glossary so short common
 # words such as 歌詞 and 追加 cannot split a longer fork label in half.
 FORK_BODY = {
+    "全角の縦線で囲んだ空白は、文字なし・演出のみの歌詞行になります": "Spaces between full-width vertical bars create a lyric line with effects only and no text",
     '配置・サイズにも自動で変化をつける': 'Vary lyric position and size automatically',
     '最小・最大サイズ倍率（％）': 'Minimum / maximum area scale (%)',
     '自動サイズの最小倍率': 'Minimum automatic size scale', '自動サイズの最大倍率': 'Maximum automatic size scale',
