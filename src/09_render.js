@@ -66,8 +66,8 @@ class Renderer {
       const layer = this.ensure(this.foregroundLayer || (this.foregroundLayer = document.createElement('canvas')), cw, ch);
       const lx = layer.getContext('2d'); lx.setTransform(1, 0, 0, 1, 0, 0); lx.globalAlpha = 1; lx.globalCompositeOperation = 'source-over'; lx.filter = 'none'; lx.clearRect(0, 0, cw, ch);
       J.drawForegroundLayer(lx, plan, t, this, !!opt.previewEdit);
-      ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = plan.foreground.opacity / 100;
-      ctx.globalCompositeOperation = { normal: 'source-over', multiply: 'multiply', screen: 'screen' }[plan.foreground.blend] || 'source-over';
+      ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = foregroundCut.opacity / 100;
+      ctx.globalCompositeOperation = { normal: 'source-over', multiply: 'multiply', screen: 'screen', overlay: 'overlay' }[foregroundCut.blend] || 'source-over';
       ctx.drawImage(layer, 0, 0); ctx.restore();
       if (frontmost) {
         // Blend frontmost cuts against the finished foreground, not against a
@@ -107,7 +107,12 @@ class Renderer {
     if (backgroundMedia) {
       ctx.fillStyle = st.schemes[0].bg; ctx.fillRect(0, 0, W, H);
       ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0);
-      J.drawMedia(ctx, plan, t, this, 'media', !!opt.previewEdit); ctx.restore();
+      const mediaLayer=this.ensure(this.mediaCompositeLayer || (this.mediaCompositeLayer=document.createElement('canvas')),cw,ch);
+      const mx=mediaLayer.getContext('2d');mx.setTransform(1,0,0,1,0,0);mx.globalAlpha=1;mx.globalCompositeOperation='source-over';mx.clearRect(0,0,cw,ch);
+      J.drawMedia(mx, plan, t, this, 'media', !!opt.previewEdit);
+      ctx.globalAlpha=mediaCut.opacity/100;
+      ctx.globalCompositeOperation={normal:'source-over',multiply:'multiply',screen:'screen',overlay:'overlay'}[mediaCut.blend] || 'source-over';
+      ctx.drawImage(mediaLayer,0,0);ctx.restore();
     }
     else if (key && !opt.transparent) { ctx.fillStyle = '#000000'; ctx.fillRect(0, 0, W, H); }
     else if (!opt.transparent) {

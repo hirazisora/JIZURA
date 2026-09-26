@@ -123,7 +123,7 @@ J.mediaCopySource = (plan,cut,t,owner,w,h) => {
   } else {
     J.drawForegroundLayer(ctx,plan,t,renderer);
     // Foreground opacity belongs to the copied result, before background effects.
-    ctx.save();ctx.globalCompositeOperation='destination-in';ctx.globalAlpha=(plan.foreground?.opacity??100)/100;ctx.fillStyle='#fff';ctx.fillRect(0,0,w,h);ctx.restore();
+    ctx.save();ctx.globalCompositeOperation='destination-in';ctx.globalAlpha=(J.mediaAt(plan,t,'foreground')?.opacity??100)/100;ctx.fillStyle='#fff';ctx.fillRect(0,0,w,h);ctx.restore();
   }
   return canvas;
 };
@@ -192,6 +192,8 @@ J.planMedia = (project, lyricPlan, audioDuration, layer = 'media') => {
       layout: ov.layout === 'stretch' ? 'cover' : J.MEDIA_LAYOUT[ov.layout] ? ov.layout : reroll ? rng.pick(Object.keys(J.MEDIA_LAYOUT)) : 'contain', enter: ov.enter || (reroll ? rng.pick(Object.keys(J.MEDIA_ENTER)) : 'cut'),
       hold: ov.hold || (reroll ? rng.pick(Object.keys(J.MEDIA_HOLD)) : 'still'), exit: ov.exit || (reroll ? rng.pick(Object.keys(J.MEDIA_EXIT)) : 'cut'),
       treat: ov.treat || (reroll ? rng.pick(Object.keys(J.MEDIA_TREAT)) : 'none'),
+      blend: ['normal','multiply','screen','overlay'].includes(ov.blend) ? ov.blend : m.blend,
+      opacity: ov.opacity != null && Number.isFinite(+ov.opacity) ? J.clamp(+ov.opacity,0,100) : m.opacity,
       zoom: 100, focus: 'mc',
       videoLoop: !!item && item.type === 'video' && ov.videoLoop !== false,
       chromaKey: !!item && item.type === 'video' && ov.chromaKey === true,

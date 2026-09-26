@@ -138,7 +138,7 @@ J.finishLyricPlan = (project, plan, audio) => {
   const settings = J.lyricEffectSettings(project);
   const foreground = settings.autoPlacement && settings.avoidForeground && J.planMedia
     ? J.planMedia(project, plan, audio?.duration, 'foreground') : null;
-  const bounds = foreground && foreground.opacity > 0 ? foreground.cuts.map(cut => ({ cut, box: J.foregroundBounds(project, plan, cut) })) : [];
+  const bounds = foreground ? foreground.cuts.filter(cut => cut.opacity > 0).map(cut => ({ cut, box: J.foregroundBounds(project, plan, cut) })) : [];
   for (const cut of plan.cuts) {
     if (cut.line < 0 || !Number.isInteger(cut.part)) continue;
     Object.assign(cut, J.lyricComposite(project, cut, settings));

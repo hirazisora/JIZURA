@@ -574,10 +574,6 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
         <div class="sec-h"><h2 id="mediaPaneTitle">Background</h2><label class="file">New<input id="mediaFiles" type="file" accept="image/*,video/*" multiple></label></div>
         <p class="hint">Drop images or videos here, or use Add to select files. Files are stored in this browser.</p>
         <div id="mediaList" class="media-list"></div>
-        <div id="foregroundBlendFields" class="fields media-blend-fields" hidden>
-          <label class="field">Foreground blend mode<select id="mediaBlend"><option value="normal">Normal</option><option value="multiply">Multiply</option><option value="screen">Screen</option></select></label>
-          <label class="field">Foreground opacity (%)<input id="mediaOpacity" type="number" min="0" max="100" step="1"></label>
-        </div>
         <div id="mediaCutInsert" class="media-lyric-insert">
           <div class="sec-h"><h2>Insert cuts</h2></div>
           <label class="field">Align inserted cuts to<select id="mediaLyricInsertMode"><option value="line">Lyric lines</option><option value="cut">Lyric cuts</option></select></label>
@@ -4316,7 +4312,7 @@ J.mediaCopySource = (plan,cut,t,owner,w,h) => {
   } else {
     J.drawForegroundLayer(ctx,plan,t,renderer);
     // Foreground opacity belongs to the copied result, before background effects.
-    ctx.save();ctx.globalCompositeOperation='destination-in';ctx.globalAlpha=(plan.foreground?.opacity??100)/100;ctx.fillStyle='#fff';ctx.fillRect(0,0,w,h);ctx.restore();
+    ctx.save();ctx.globalCompositeOperation='destination-in';ctx.globalAlpha=(J.mediaAt(plan,t,'foreground')?.opacity??100)/100;ctx.fillStyle='#fff';ctx.fillRect(0,0,w,h);ctx.restore();
   }
   return canvas;
 };
@@ -4385,6 +4381,8 @@ J.planMedia = (project, lyricPlan, audioDuration, layer = 'media') => {
       layout: ov.layout === 'stretch' ? 'cover' : J.MEDIA_LAYOUT[ov.layout] ? ov.layout : reroll ? rng.pick(Object.keys(J.MEDIA_LAYOUT)) : 'contain', enter: ov.enter || (reroll ? rng.pick(Object.keys(J.MEDIA_ENTER)) : 'cut'),
       hold: ov.hold || (reroll ? rng.pick(Object.keys(J.MEDIA_HOLD)) : 'still'), exit: ov.exit || (reroll ? rng.pick(Object.keys(J.MEDIA_EXIT)) : 'cut'),
       treat: ov.treat || (reroll ? rng.pick(Object.keys(J.MEDIA_TREAT)) : 'none'),
+      blend: ['normal','multiply','screen','overlay'].includes(ov.blend) ? ov.blend : m.blend,
+      opacity: ov.opacity != null && Number.isFinite(+ov.opacity) ? J.clamp(+ov.opacity,0,100) : m.opacity,
       zoom: 100, focus: 'mc',
       videoLoop: !!item && item.type === 'video' && ov.videoLoop !== false,
       chromaKey: !!item && item.type === 'video' && ov.chromaKey === true,
@@ -4808,7 +4806,7 @@ J.finishLyricPlan = (project, plan, audio) => {
   const settings = J.lyricEffectSettings(project);
   const foreground = settings.autoPlacement && settings.avoidForeground && J.planMedia
     ? J.planMedia(project, plan, audio?.duration, 'foreground') : null;
-  const bounds = foreground && foreground.opacity > 0 ? foreground.cuts.map(cut => ({ cut, box: J.foregroundBounds(project, plan, cut) })) : [];
+  const bounds = foreground ? foreground.cuts.filter(cut => cut.opacity > 0).map(cut => ({ cut, box: J.foregroundBounds(project, plan, cut) })) : [];
   for (const cut of plan.cuts) {
     if (cut.line < 0 || !Number.isInteger(cut.part)) continue;
     Object.assign(cut, J.lyricComposite(project, cut, settings));
@@ -5558,7 +5556,7 @@ J.cutEffectsPayload=(cut,layer,plan)=>{
     for (const key of ['chunks','msgs','units']) if (Array.isArray(details.params?.[key])) delete details.params[key];
   }
   if(kind==='media' && details.effectSettings)details.effectSettings=pick(details.effectSettings,['motion','treatment','duration']);
-  return {format:'jizura-cut-effects',version:1,kind,details,native:pick(cut,kind==='lyrics'?['blend','opacity','frontmost']:['technique','entrance','departure','chromaKey','chromaColor'])};
+  return {format:'jizura-cut-effects',version:1,kind,details,native:pick(cut,kind==='lyrics'?['blend','opacity','frontmost']:['technique','entrance','departure','chromaKey','chromaColor','blend','opacity'])};
 };
 J.readCutEffects=text=>{
   if(typeof text!=='string'||text.length>262144)throw Error('invalid');
@@ -5690,8 +5688,8 @@ class Renderer {
       const layer = this.ensure(this.foregroundLayer || (this.foregroundLayer = document.createElement('canvas')), cw, ch);
       const lx = layer.getContext('2d'); lx.setTransform(1, 0, 0, 1, 0, 0); lx.globalAlpha = 1; lx.globalCompositeOperation = 'source-over'; lx.filter = 'none'; lx.clearRect(0, 0, cw, ch);
       J.drawForegroundLayer(lx, plan, t, this, !!opt.previewEdit);
-      ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = plan.foreground.opacity / 100;
-      ctx.globalCompositeOperation = { normal: 'source-over', multiply: 'multiply', screen: 'screen' }[plan.foreground.blend] || 'source-over';
+      ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = foregroundCut.opacity / 100;
+      ctx.globalCompositeOperation = { normal: 'source-over', multiply: 'multiply', screen: 'screen', overlay: 'overlay' }[foregroundCut.blend] || 'source-over';
       ctx.drawImage(layer, 0, 0); ctx.restore();
       if (frontmost) {
         // Blend frontmost cuts against the finished foreground, not against a
@@ -5731,7 +5729,12 @@ class Renderer {
     if (backgroundMedia) {
       ctx.fillStyle = st.schemes[0].bg; ctx.fillRect(0, 0, W, H);
       ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0);
-      J.drawMedia(ctx, plan, t, this, 'media', !!opt.previewEdit); ctx.restore();
+      const mediaLayer=this.ensure(this.mediaCompositeLayer || (this.mediaCompositeLayer=document.createElement('canvas')),cw,ch);
+      const mx=mediaLayer.getContext('2d');mx.setTransform(1,0,0,1,0,0);mx.globalAlpha=1;mx.globalCompositeOperation='source-over';mx.clearRect(0,0,cw,ch);
+      J.drawMedia(mx, plan, t, this, 'media', !!opt.previewEdit);
+      ctx.globalAlpha=mediaCut.opacity/100;
+      ctx.globalCompositeOperation={normal:'source-over',multiply:'multiply',screen:'screen',overlay:'overlay'}[mediaCut.blend] || 'source-over';
+      ctx.drawImage(mediaLayer,0,0);ctx.restore();
     }
     else if (key && !opt.transparent) { ctx.fillStyle = '#000000'; ctx.fillRect(0, 0, W, H); }
     else if (!opt.transparent) {
@@ -38301,7 +38304,6 @@ function syncSourceTab() {
   $('lineList').hidden = media; $('mediaLineList').hidden = !media;
   $('cutsHeading').textContent = media ? J.mediaLabel('cuts', 'Cuts') : J.mediaLabel('line とcuts', 'Lines and cuts');
   $('mediaPaneTitle').textContent = layer === 'foreground' ? 'Foreground' : 'Background';
-  $('foregroundBlendFields').hidden = layer !== 'foreground';
   $('linesInfo').textContent = media ? `${m.items.length}files / ${S.plan[layer].cuts.length}cuts` : `${S.plan.lines.length} lines / ${S.plan.cuts.length} cuts`;
   $('mediaRandom').disabled = !media || (m.items.length < 2 && !m.randomOrder);
   $('mediaRandom').title = media && m.items.length < 2 && !m.randomOrder ? J.mediaLabel('素材を2つ以上Newすると選択できます', 'Add at least two files to enable random order') : '';
@@ -38392,8 +38394,6 @@ function renderMediaList() {
   });
   $('mediaRandom').checked = !!m.randomOrder;
   $('mediaLoop').checked = !!m.loop;
-  $('mediaBlend').value = m.blend;
-  $('mediaOpacity').value = m.opacity;
 }
 function mediaOv(index, patch, layer = activeMediaLayer() || 'media') {
   const m = S.project[layer];
@@ -38525,6 +38525,13 @@ function renderMediaLines() {
     li.querySelectorAll('[data-media-phase]').forEach(select => select.addEventListener('change', e => {
       mediaOv(i, { [select.dataset.mediaPhase]: e.target.value || null, lock: false }, layer); replan();
     }));
+    const compositing=document.createElement('div');compositing.className='lyric-cut-compositing media-cut-compositing';
+    const L=J.mediaLabel,modes={normal:L('通常','Normal'),multiply:L('乗算','Multiply'),screen:L('スクリーン','Screen'),overlay:L('オーバーレイ','Overlay')};
+    compositing.innerHTML=`<label>${L('合成方法','Blend')}<select class="media-cut-blend" aria-label="${L('このcutsの合成方法','This cut blend mode')}">${Object.entries(modes).map(([value,label])=>`<option value="${value}">${label}</option>`).join('')}</select></label><label>${L('不透明度（％）','Opacity (%)')}<input class="media-cut-opacity" type="number" min="0" max="100" step="1" value="${cut.opacity}" aria-label="${L('このcutsの不透明度（％）','This cut opacity (%)')}"></label>`;
+    compositing.querySelector('select').value=cut.blend;
+    compositing.querySelector('select').addEventListener('change',e=>{mediaOv(i,{blend:e.target.value},layer);replan();});
+    compositing.querySelector('input').addEventListener('change',e=>{mediaOv(i,{opacity:J.clamp(+e.target.value||0,0,100)},layer);replan();});
+    li.querySelector('.meta').append(compositing);
     li.querySelector('.time').addEventListener('change', e => { m.timing.lineTimes[i] = Math.max(0, parseFloat(e.target.value) || 0); replan(); });
     li.querySelector('.media-cut-file').addEventListener('change', e => { mediaOv(i, { itemId: e.target.value || null, ...(ov.lock?{lockedItemId:e.target.value||null}:{}) }, layer); replan(); });
     li.querySelector('.media-technique').addEventListener('change', e => { if (e.target.value !== 'legacy') { mediaOv(i, { technique: e.target.value || null, lock: false, lockedTechnique: undefined }, layer); replan(); } });
@@ -39282,8 +39289,6 @@ function bind() {
     if (e.target.checked && !m.cutCount) m.cutCount = Math.min(1000, m.items.length * 2);
     replan();
   });
-  $('mediaBlend').addEventListener('change', e => { S.project.foreground.blend = e.target.value; replan(); });
-  $('mediaOpacity').addEventListener('change', e => { S.project.foreground.opacity = J.clamp(+e.target.value || 0, 0, 100); replan(); });
   $('lyricInputTools').addEventListener('click', e => {
     const button=e.target.closest('[data-lyric-insert]'); if (!button) return;
     const input=$('lyrics'), start=input.selectionStart, end=input.selectionEnd;

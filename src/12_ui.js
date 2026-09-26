@@ -1269,7 +1269,6 @@ function syncSourceTab() {
   $('lineList').hidden = media; $('mediaLineList').hidden = !media;
   $('cutsHeading').textContent = media ? J.mediaLabel('カット', 'Cuts') : J.mediaLabel('行とカット', 'Lines and cuts');
   $('mediaPaneTitle').textContent = layer === 'foreground' ? '前景' : '背景';
-  $('foregroundBlendFields').hidden = layer !== 'foreground';
   $('linesInfo').textContent = media ? `${m.items.length}素材 / ${S.plan[layer].cuts.length}カット` : `${S.plan.lines.length}行 / ${S.plan.cuts.length}カット`;
   $('mediaRandom').disabled = !media || (m.items.length < 2 && !m.randomOrder);
   $('mediaRandom').title = media && m.items.length < 2 && !m.randomOrder ? J.mediaLabel('素材を2つ以上追加すると選択できます', 'Add at least two files to enable random order') : '';
@@ -1360,8 +1359,6 @@ function renderMediaList() {
   });
   $('mediaRandom').checked = !!m.randomOrder;
   $('mediaLoop').checked = !!m.loop;
-  $('mediaBlend').value = m.blend;
-  $('mediaOpacity').value = m.opacity;
 }
 function mediaOv(index, patch, layer = activeMediaLayer() || 'media') {
   const m = S.project[layer];
@@ -1493,6 +1490,13 @@ function renderMediaLines() {
     li.querySelectorAll('[data-media-phase]').forEach(select => select.addEventListener('change', e => {
       mediaOv(i, { [select.dataset.mediaPhase]: e.target.value || null, lock: false }, layer); replan();
     }));
+    const compositing=document.createElement('div');compositing.className='lyric-cut-compositing media-cut-compositing';
+    const L=J.mediaLabel,modes={normal:L('通常','Normal'),multiply:L('乗算','Multiply'),screen:L('スクリーン','Screen'),overlay:L('オーバーレイ','Overlay')};
+    compositing.innerHTML=`<label>${L('合成方法','Blend')}<select class="media-cut-blend" aria-label="${L('このカットの合成方法','This cut blend mode')}">${Object.entries(modes).map(([value,label])=>`<option value="${value}">${label}</option>`).join('')}</select></label><label>${L('不透明度（％）','Opacity (%)')}<input class="media-cut-opacity" type="number" min="0" max="100" step="1" value="${cut.opacity}" aria-label="${L('このカットの不透明度（％）','This cut opacity (%)')}"></label>`;
+    compositing.querySelector('select').value=cut.blend;
+    compositing.querySelector('select').addEventListener('change',e=>{mediaOv(i,{blend:e.target.value},layer);replan();});
+    compositing.querySelector('input').addEventListener('change',e=>{mediaOv(i,{opacity:J.clamp(+e.target.value||0,0,100)},layer);replan();});
+    li.querySelector('.meta').append(compositing);
     li.querySelector('.time').addEventListener('change', e => { m.timing.lineTimes[i] = Math.max(0, parseFloat(e.target.value) || 0); replan(); });
     li.querySelector('.media-cut-file').addEventListener('change', e => { mediaOv(i, { itemId: e.target.value || null, ...(ov.lock?{lockedItemId:e.target.value||null}:{}) }, layer); replan(); });
     li.querySelector('.media-technique').addEventListener('change', e => { if (e.target.value !== 'legacy') { mediaOv(i, { technique: e.target.value || null, lock: false, lockedTechnique: undefined }, layer); replan(); } });
@@ -2250,8 +2254,6 @@ function bind() {
     if (e.target.checked && !m.cutCount) m.cutCount = Math.min(1000, m.items.length * 2);
     replan();
   });
-  $('mediaBlend').addEventListener('change', e => { S.project.foreground.blend = e.target.value; replan(); });
-  $('mediaOpacity').addEventListener('change', e => { S.project.foreground.opacity = J.clamp(+e.target.value || 0, 0, 100); replan(); });
   $('lyricInputTools').addEventListener('click', e => {
     const button=e.target.closest('[data-lyric-insert]'); if (!button) return;
     const input=$('lyrics'), start=input.selectionStart, end=input.selectionEnd;

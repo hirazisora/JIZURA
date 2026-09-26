@@ -27,7 +27,7 @@ J.cutEffectsPayload=(cut,layer,plan)=>{
     for (const key of ['chunks','msgs','units']) if (Array.isArray(details.params?.[key])) delete details.params[key];
   }
   if(kind==='media' && details.effectSettings)details.effectSettings=pick(details.effectSettings,['motion','treatment','duration']);
-  return {format:'jizura-cut-effects',version:1,kind,details,native:pick(cut,kind==='lyrics'?['blend','opacity','frontmost']:['technique','entrance','departure','chromaKey','chromaColor'])};
+  return {format:'jizura-cut-effects',version:1,kind,details,native:pick(cut,kind==='lyrics'?['blend','opacity','frontmost']:['technique','entrance','departure','chromaKey','chromaColor','blend','opacity'])};
 };
 J.readCutEffects=text=>{
   if(typeof text!=='string'||text.length>262144)throw Error('invalid');
