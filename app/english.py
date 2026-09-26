@@ -14,6 +14,9 @@ BODY = {
     'このfork版は、テーマに合わせた構成選定と、背景・前景の画像・動画編集機能を追加しています。編集・書き出しはブラウザ内で処理します。': 'This fork adds theme-guided arrangements and background/foreground image and video editing. Editing and export run in your browser.',
     '<button id="btnApplyThemes" type="button">適用</button>': '<button id="btnApplyThemes" type="button">Apply</button>',
 
+    '歌詞同士の重なり回避の強度': 'Lyric overlap avoidance strength',
+    '<code>{-</code> と <code>-}</code> で囲んだ複数行 … 順に残して表示し、歌詞同士の重なりを避ける': '<code>{-</code> and <code>-}</code> around lines … retain successive lyrics while avoiding overlaps.',
+    '<code>{- … -}</code> のグループに適用。1で歌詞の表示領域を重ならないように配置し、0では通常の重ね表示になります。自動配置がオフでも適用します。': 'Applies to <code>{- … -}</code> groups. At 1, lyric areas are arranged without overlaps; at 0, use ordinary retained layering. Works even with automatic placement off.',
     '重なり回避の強度': 'Foreground avoidance strength',
     '1で前景の範囲を避け、下げると周辺の重なりを許容します。0では回避しません。空き領域がない場合は最も重なりの少ない配置を使います。': 'At 1, avoid the foreground bounds. Lower values allow overlap around its edges; 0 disables avoidance. If no free region exists, use the least overlapping placement.',
     '素材入りプロジェクト（.jizuraichi）を開く': 'Open a portable project (.jizuraichi)',

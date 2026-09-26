@@ -43,6 +43,7 @@
             <li><code>｜　　　｜</code> … 全角の縦線で囲んだ空白は、文字なし・演出のみの歌詞行になります</li>
             <li><code>夜明けの色を/覚えてる</code> … <code>/</code> でカットの切れ目を指定</li>
             <li><code>{</code> と <code>}</code> で囲んだ複数行 … 最後のカットが消えるまで順に重ねて表示</li>
+            <li><code>{-</code> と <code>-}</code> で囲んだ複数行 … 順に残して表示し、歌詞同士の重なりを避ける</li>
             <li><code>夜明けの色を\n覚えてる</code> … <code>\n</code> で1カット内の改行を指定（文字として書く場合は <code>\\n</code>）</li>
             <li><code>*透明*</code> … 強調（自動表示エリアを大きくし、前景より手前に表示。前景回避の対象外）</li>
             <li><code>~ささやき~</code> … 抑制（表示と動きを小さく）</li>
@@ -246,6 +247,8 @@
           <label class="check"><input id="lyricAvoidForeground" type="checkbox" checked><span>前景との重なりを避ける<small>自動配置時に前景の表示領域を避けます。*強調*したカットには適用しません。</small></span></label>
           <label class="slider"><span>重なり回避の強度</span><input id="lyricAvoidanceStrength" type="range" min="0" max="1" step="0.05" value="1"><output id="lyricAvoidanceStrengthValue">1.00</output></label>
           <p class="note">1で前景の範囲を避け、下げると周辺の重なりを許容します。0では回避しません。空き領域がない場合は最も重なりの少ない配置を使います。</p>
+          <label class="slider"><span>歌詞同士の重なり回避の強度</span><input id="lyricGroupAvoidanceStrength" type="range" min="0" max="1" step="0.05" value="1"><output id="lyricGroupAvoidanceStrengthValue">1.00</output></label>
+          <p class="note"><code>{- … -}</code> のグループに適用。1で歌詞の表示領域を重ならないように配置し、0では通常の重ね表示になります。自動配置がオフでも適用します。</p>
           <label class="check"><input id="lyricRandomBlend" type="checkbox"><span>合成方法もランダム<small>通常・乗算・スクリーン・オーバーレイからカットごとに選びます。</small></span></label>
           <label class="check"><input id="lyricRandomOpacity" type="checkbox"><span>歌詞不透明度もランダム<small>指定範囲内で、*強調*は高め、~抑制~は低めにします。手動指定とロックを優先します。</small></span></label>
           <div class="fields lyric-opacity-range" id="lyricOpacityRange" hidden>

@@ -1756,6 +1756,8 @@ function renderTech() {
   $('lyricAutoSizeSlider').style.setProperty('--range-min', `${lyricEffects.sizeMin / 5}%`);
   $('lyricAutoSizeSlider').style.setProperty('--range-max', `${lyricEffects.sizeMax / 5}%`);
   $('lyricAvoidForeground').checked = lyricEffects.avoidForeground;
+  $('lyricGroupAvoidanceStrength').value = lyricEffects.lyricAvoidanceStrength;
+  $('lyricGroupAvoidanceStrengthValue').textContent = lyricEffects.lyricAvoidanceStrength.toFixed(2);
   $('lyricAvoidanceStrength').value = lyricEffects.avoidanceStrength;
   $('lyricAvoidanceStrengthValue').textContent = lyricEffects.avoidanceStrength.toFixed(2);
   $('lyricAvoidanceStrength').disabled = !lyricEffects.autoPlacement || !lyricEffects.avoidForeground;
@@ -2098,6 +2100,11 @@ function bind() {
   });
   $('btnClearThemes').addEventListener('click', () => $('themeChoices').querySelectorAll('input').forEach(el=>el.checked=false));
 
+  $('lyricGroupAvoidanceStrength').addEventListener('input', e => {
+    S.project.lyricEffects = { ...J.lyricEffectSettings(S.project), lyricAvoidanceStrength: +e.target.value };
+    $('lyricGroupAvoidanceStrengthValue').textContent = (+e.target.value).toFixed(2);
+    markUndoGroup('lyricGroupAvoidanceStrength'); replanSoon(100);
+  });
   $('lyricAvoidanceStrength').addEventListener('input', e => {
     S.project.lyricEffects = { ...J.lyricEffectSettings(S.project), avoidanceStrength: +e.target.value };
     $('lyricAvoidanceStrengthValue').textContent = (+e.target.value).toFixed(2);

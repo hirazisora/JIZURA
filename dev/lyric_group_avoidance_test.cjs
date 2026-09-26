@@ -1,0 +1,22 @@
+const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
+(async()=>{const browser=await chromium.launch({headless:true,executablePath:'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'});try{for(const locale of ['', 'en/']){
+const page=await browser.newPage({viewport:{width:1500,height:1100}}),errors=[];page.on('pageerror',e=>errors.push(e.message));const url='http://127.0.0.1:8765/'+locale;await page.route('**/*',r=>r.request().url()===url?r.fulfill({contentType:'text/html',body:fs.readFileSync(path.join(__dirname,'..',locale,'index.html'))}):r.abort());await page.goto(url);
+const report=await page.evaluate(async()=>{
+const check=(v,m)=>{if(!v)throw Error(m)},words='[00:00]First/phrase\n[00:02]*Second*\n[00:04]~Third~';
+const parsed=J.parseLyrics(`{-\n${words}\n-}\n[00:06]Outside`).lines;check(parsed.slice(0,3).every(l=>l.avoidOverlap&&l.group===0),'group flag');check(parsed[3].group===null&&!parsed[3].avoidOverlap,'group close');check(parsed[0].text==='First phrase','delimiters removed');
+const inline=J.parseLyrics('[00:00]{-Inline/test-}').lines[0];check(inline.avoidOverlap&&inline.text==='Inline test','inline timestamps');
+const escaped=J.parseLyrics(String.raw`\{-literal-\}`).lines[0];check(escaped.group===null&&escaped.text==='{-literal-}','escaped delimiters');check(J.parseLyrics('{-\nopen').lines[0].avoidOverlap,'unfinished group');
+const overlap=(a,b)=>Math.max(0,Math.min(a.x+a.w,b.x+b.w)-Math.max(a.x,b.x))*Math.max(0,Math.min(a.y+a.h,b.y+b.h)-Math.max(a.y,b.y));
+const bounds=(a,plan)=>{const angle=(a.angle||0)*Math.PI/180,c=Math.abs(Math.cos(angle)),s=Math.abs(Math.sin(angle)),w=a.w*c+a.h*plan.H/plan.W*s,h=a.h*c+a.w*plan.W/plan.H*s;return{x:a.x+a.w/2-w/2,y:a.y+a.h/2-h/2,w,h}};
+const p=J.defaultProject();p.lyrics=`{-\n${words}\n-}\n[00:06]Outside`;p.durationOverride=8;
+const baseline=J.plan({...p,lyrics:`{\n${words}\n}\n[00:06]Outside`}),zero=J.plan({...p,lyricEffects:{lyricAvoidanceStrength:0}}),full=J.plan(p),group=full.cuts.filter(c=>c.group===0);
+check(JSON.stringify(zero.cuts.map(c=>[c.text,c.start,c.end,c.displayEnd,c.area]))===JSON.stringify(baseline.cuts.map(c=>[c.text,c.start,c.end,c.displayEnd,c.area])),'zero matches braces');check(group.length===4&&J.lyricCutsAt(full,4.5).length===4,'retained parts');
+const nonoverlap=plan=>{const cs=plan.cuts.filter(c=>c.group===0);for(let i=0;i<cs.length;i++)for(let j=i+1;j<cs.length;j++)check(overlap(bounds(cs[i].area,plan),bounds(cs[j].area,plan))<1e-9,'overlap at strength one');};nonoverlap(full);
+for(const aspect of ['16:9','9:16','1:1']){const q={...p,aspect,overrides:{0:{area:{x:.1,y:.1,w:.8,h:.6,angle:35}},1:{area:{x:.1,y:.1,w:.8,h:.6,angle:-25}},2:{area:{x:.1,y:.1,w:.8,h:.6,angle:75}}}};const plan=J.plan(q);nonoverlap(plan);for(const c of plan.cuts.filter(c=>c.group===0))check(Math.abs(c.area.w/c.area.h-.8/.6)<1e-8,'aspect changed');}
+const snapshots=JSON.stringify(full.cuts.map(c=>c.area));const cv=document.createElement('canvas');cv.width=320;cv.height=180;const renderer=new J.Renderer();for(const t of [4.5,.1,2.5,6.1])renderer.frame(cv.getContext('2d'),full,t,{scale:320/full.W});check(snapshots===JSON.stringify(full.cuts.map(c=>c.area)),'seek moved area');
+const half=J.plan({...p,lyricEffects:{lyricAvoidanceStrength:.5}});check(half.cuts[0].area.w>full.cuts[0].area.w&&half.cuts[0].area.w<1,'intermediate strength');
+J.ui.project=p;J.uiApi.syncUI();J.uiApi.replan();J.uiApi.seek(4.5);return {groups:parsed.map(l=>l.group),cuts:group.length};
+});
+await page.locator('#modePro').click();await page.locator('[data-tab="tech"]').click();const slider=page.locator('#lyricGroupAvoidanceStrength');assert.equal(await slider.isEnabled(),true);await slider.fill('0.35');await slider.dispatchEvent('input');await page.waitForFunction(()=>J.ui.project.lyricEffects.lyricAvoidanceStrength===.35);await page.evaluate(()=>J.uiApi.flushSave());const saved=await page.evaluate(async()=>{const decoded=await J.unpackProject(await J.packProject(J.ui.project,null));return decoded.project.lyricEffects.lyricAvoidanceStrength});assert.equal(saved,.35);
+await page.reload();assert.equal(await slider.inputValue(),'0.35');assert.deepEqual(errors,[]);console.log(locale||'ja',report,'group avoidance and settings passed');await page.close();}
+}finally{await browser.close();}})().catch(e=>{console.error(e);process.exit(1)});

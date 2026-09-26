@@ -27,7 +27,7 @@ J.defaultProject = () => ({
   timing: { bpm: 0, offset: 0.4, snap: true, tail: 0.9, lineTimes: {}, cutTimes: {}, lineScale: 1 },
   overrides: {},
   lyricCutOptions: {},
-  lyricEffects: { autoPlacement: false, avoidForeground: true, avoidanceStrength: 1, randomBlend: false, randomOpacity: false, opacityMin: 0, opacityMax: 100 },
+  lyricEffects: { autoPlacement: false, avoidForeground: true, avoidanceStrength: 1, lyricAvoidanceStrength: 1, randomBlend: false, randomOpacity: false, opacityMin: 0, opacityMax: 100 },
   lyricBlankCuts: [],
   timelineLinks: [],
   media: { items: [], randomOrder: false, loop: false, cutCount: 0, seed: 1, timing: { lineTimes: {} }, overrides: {}, cutOverrides: {}, blend: 'normal', opacity: 100 },
@@ -50,21 +50,26 @@ const protectLyricEscapes = s => s.replace(/\\([\\#\[\]|!！*\/{}~n])/g, (_, lit
 const restoreLyricEscapes = s => String(s).replace(/[\uE000-\uE00B]/g, token => lyricUnescapes[token]);
 J.parseLyrics = (raw) => {
   const lines = []; const meta = {};
-  let pendingGap = false, group = null, nextGroup = 0;
+  let pendingGap = false, group = null, nextGroup = 0, avoidOverlap = false;
+  const openGroup = text => {
+    if (!text.startsWith('{')) return text;
+    group = nextGroup++; avoidOverlap = text.startsWith('{-');
+    return text.slice(avoidOverlap ? 2 : 1).trim();
+  };
   for (let src of String(raw || '').replace(/\r/g, '').split('\n')) {
     let s0 = protectLyricEscapes(src.trim());
     if (!s0) { if (lines.length) pendingGap = true; continue; }
     if (s0.startsWith('#')) continue;
     const mm = s0.match(/^\[(ti|ar|al|by|offset):(.*)\]$/i);
     if (mm) { meta[mm[1].toLowerCase()] = restoreLyricEscapes(mm[2].trim()); continue; }
-    if (s0.startsWith('{')) { group = nextGroup++; s0 = s0.slice(1).trim(); }
+    s0 = openGroup(s0);
     let s = s0; const times = [];
     let m;
     while ((m = s.match(/^\[(\d+):(\d+(?:[.:]\d+)?)\]/))) { times.push(+m[1] * 60 + parseFloat(m[2].replace(':', '.'))); s = s.slice(m[0].length); }
     s = s.trim();
-    if (s.startsWith('{')) { group = nextGroup++; s = s.slice(1).trim(); }
-    const closeGroup = s.endsWith('}');
-    if (closeGroup) s = s.slice(0, -1).trim();
+    s = openGroup(s);
+    const closeGroup = s.endsWith(avoidOverlap ? '-}' : '}');
+    if (closeGroup) s = s.slice(0, avoidOverlap ? -2 : -1).trim();
     let note = null;
     const bar = s.indexOf('|');
     if (bar >= 0) { note = restoreLyricEscapes(s.slice(bar + 1).trim()) || null; s = s.slice(0, bar).trim(); }
@@ -91,10 +96,10 @@ J.parseLyrics = (raw) => {
       const latin = manual.some(x => /[A-Za-z]/.test(x));
       s = manual.join(latin ? ' ' : '');
     }
-    const lineGroup = group;
-    if (closeGroup) group = null;
+    const lineGroup = group, lineAvoidOverlap = avoidOverlap;
+    if (closeGroup) { group = null; avoidOverlap = false; }
     if (!s) continue;
-    const base = { text: restoreLyricEscapes(s), effectsOnly, note, impact, emph, soft, strengthSpans, manual, group: lineGroup, gapBefore: pendingGap };
+    const base = { text: restoreLyricEscapes(s), effectsOnly, note, impact, emph, soft, strengthSpans, manual, group: lineGroup, avoidOverlap: lineAvoidOverlap, gapBefore: pendingGap };
     pendingGap = false;
     if (times.length) times.forEach(t => lines.push(Object.assign({}, base, { lrc: t })));
     else lines.push(Object.assign({}, base, { lrc: null }));
@@ -272,7 +277,7 @@ J.plan = (project, audio) => {
     const visEnd = ln.effectsOnly ? e : interludeTime != null && Number.isFinite(+interludeTime) && e - s > 1.81
       ? J.clamp(+interludeTime, s + 0.5, e - 1.31) : naturalVisEnd;
     const D = visEnd - s;
-    plan.lines.push({ index: li, text: ln.text, start: s, end: e, visEnd, note: ln.note, impact: ln.impact, emph: ln.emph, soft: ln.soft, group: ln.group, chunks: null, seed: lineSeed });
+    plan.lines.push({ index: li, text: ln.text, start: s, end: e, visEnd, note: ln.note, impact: ln.impact, emph: ln.emph, soft: ln.soft, group: ln.group, avoidOverlap: !!ln.avoidOverlap, chunks: null, seed: lineSeed });
     const multiline = ln.text.includes('\n');
     const chunks = ln.manual || (multiline ? [ln.text] : J.chunkText(ln.text));
     plan.lines[li].chunks = chunks;
@@ -357,7 +362,7 @@ J.plan = (project, audio) => {
           prevCut.exit = 'cut'; prevCut.outDur = 0;
         }
       }
-      const cut = makeCut({ text: txt, effectsOnly: !!ln.effectsOnly, lineText: ln.text, note: ln.note, line: li, part: k, group: ln.group, start: cs, end: ce, layout, enter, exit, hold, inDur, outDur, params, decor, scheme: sch, seed: J.h(lineSeed, k, 17), area, frontmost: !!frontmost, emphasis, suppressed, motionScale: suppressed ? 0.25 : 1, contentScale: suppressed ? 0.7 : 1, emph, recap: !!u.recap, words: J.chunkText(txt), stagger: rng.range(0.025, 0.06),
+      const cut = makeCut({ text: txt, effectsOnly: !!ln.effectsOnly, lineText: ln.text, note: ln.note, line: li, part: k, group: ln.group, avoidOverlap: !!ln.avoidOverlap, start: cs, end: ce, layout, enter, exit, hold, inDur, outDur, params, decor, scheme: sch, seed: J.h(lineSeed, k, 17), area, frontmost: !!frontmost, emphasis, suppressed, motionScale: suppressed ? 0.25 : 1, contentScale: suppressed ? 0.7 : 1, emph, recap: !!u.recap, words: J.chunkText(txt), stagger: rng.range(0.025, 0.06),
         treat, treatP, bg, bgP: bg === lineBg ? lineBgP : {}, cam, camP, trans, transP, transDur });
       plan.cuts.push(cut);
       history.push({ layout, enter, exit, hold, treat, cam, trans, decor: decor.map(d => d.id) });

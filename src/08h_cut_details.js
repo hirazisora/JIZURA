@@ -46,6 +46,7 @@ J.plan = function(project, ...args) {
   for (const cut of plan.cuts) if (last.has(cut.group)) {
     cut.groupExit = last.get(cut.group).exit; cut.groupOutDur = last.get(cut.group).outDur;
   }
+  J.applyLyricGroupAvoidance(project,plan);
   return plan;
 };
 const planMedia = J.planMedia;

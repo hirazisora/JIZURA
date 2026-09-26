@@ -12,6 +12,7 @@ J.lyricEffectSettings = project => {
   return {
     autoPlacement: settings.autoPlacement === true, avoidForeground: settings.avoidForeground !== false,
     avoidanceStrength: settings.avoidanceStrength != null && Number.isFinite(+settings.avoidanceStrength) ? J.clamp(+settings.avoidanceStrength, 0, 1) : 1,
+    lyricAvoidanceStrength: settings.lyricAvoidanceStrength != null && Number.isFinite(+settings.lyricAvoidanceStrength) ? J.clamp(+settings.lyricAvoidanceStrength,0,1) : 1,
     sizeMin: Math.min(sizeMin, sizeMax), sizeMax: Math.max(sizeMin, sizeMax),
     randomBlend: settings.randomBlend === true, randomOpacity: settings.randomOpacity === true,
     opacityMin: Math.min(min, max), opacityMax: Math.max(min, max),
@@ -171,6 +172,57 @@ J.finishLyricPlan = (project, plan, audio) => {
       }, plan.style);
       if (cut.text.includes('\n')) cut.params.sx = 1;
     }
+  }
+};
+
+// Resolve retained groups once at plan time: seeking never moves earlier lyrics.
+// Pack rotated display areas rather than stretching text or changing timeline times.
+J.applyLyricGroupAvoidance = (project, plan) => {
+  const settings=J.lyricEffectSettings(project),strength=settings.lyricAvoidanceStrength;
+  if(strength===0)return;
+  const groups=new Map();
+  for(const cut of plan.cuts)if(cut.avoidOverlap && cut.group!=null && Number.isInteger(cut.part) && !cut.effectsOnly){
+    if(!groups.has(cut.group))groups.set(cut.group,[]);groups.get(cut.group).push(cut);
+  }
+  const bounds=area=>{
+    const angle=(area.angle||0)*J.DEG,c=Math.abs(Math.cos(angle)),s=Math.abs(Math.sin(angle));
+    const w=area.w*c+area.h*plan.H/plan.W*s,h=area.h*c+area.w*plan.W/plan.H*s;
+    return {x:area.x+area.w/2-w/2,y:area.y+area.h/2-h/2,w,h};
+  };
+  const foreground=settings.autoPlacement&&settings.avoidForeground&&settings.avoidanceStrength>0
+    ? J.planMedia(project,plan,null,'foreground') : null;
+  for(const cuts of groups.values()){
+    if(cuts.length<2)continue;
+    const areas=cuts.map(c=>c.area||{x:0,y:0,w:1,h:1,angle:0,lockAspect:true}),boxes=areas.map(bounds);
+    if(!boxes.some((box,i)=>boxes.slice(i+1).some(other=>overlap(box,other)>1e-8)))continue;
+    const obstacles=foreground?.opacity>0?foreground.cuts.filter(f=>f.start<cuts.at(-1).displayEnd&&f.end>cuts[0].start)
+      .map(f=>J.foregroundBounds(project,plan,f)).filter(Boolean).map(b=>{
+        const w=b.w*settings.avoidanceStrength,h=b.h*settings.avoidanceStrength;
+        return {x:b.x+b.w/2-w/2,y:b.y+b.h/2-h/2,w,h};
+      }):[];
+    let regions=emptyRegions(obstacles);if(!regions.length)regions=[{x:.025,y:.025,w:.95,h:.95}];
+    const maxW=Math.max(...boxes.map(b=>b.w)),maxH=Math.max(...boxes.map(b=>b.h)),n=cuts.length;
+    let best=null;
+    // Bounded search even for large lyric groups.
+    for(const region of regions)for(const cols of new Set([...Array.from({length:Math.min(n,64)},(_,i)=>i+1),n])){
+      const rows=Math.ceil(n/cols),cw=region.w/cols,ch=region.h/rows;
+      const scale=Math.min(1,cw*.94/maxW,ch*.94/maxH);
+      if(!best||scale>best.scale+1e-9)best={region,cols,rows,cw,ch,scale};
+    }
+    cuts.forEach((cut,i)=>{
+      const a=areas[i],b=best,scale=J.lerp(1,b.scale,strength);
+      const cx=J.lerp(a.x+a.w/2,b.region.x+(i%b.cols+.5)*b.cw,strength);
+      const cy=J.lerp(a.y+a.h/2,b.region.y+(Math.floor(i/b.cols)+.5)*b.ch,strength);
+      cut.area={...a,x:cx-a.w*scale/2,y:cy-a.h*scale/2,w:a.w*scale,h:a.h*scale};
+      cut.areaMode='group';
+      const layout=J.LAYOUTS[cut.layout];
+      if(layout?.plan)cut.params=layout.plan(J.rng(J.h(cut.seed,318)),{
+        text:cut.text,n:[...cut.text.replace(/\s/g,'')].length,W:plan.W*cut.area.w,H:plan.H*cut.area.h,dur:cut.dur,
+      },plan.style);
+      if(cut.text.includes('\n'))cut.params.sx=1;
+      const customParams=project.lyricCutOptions?.[`${cut.line}:${cut.part}`]?.details?.params;
+      if(customParams && typeof customParams==='object')Object.assign(cut.params,customParams);
+    });
   }
 };
 

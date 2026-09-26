@@ -80,3 +80,7 @@ Set **File name** in the export dialog for MP4, PNG sequence ZIP and transparent
 ### Effects-only lyrics and offscreen areas
 
 Enter `｜   ｜` (spaces between full-width vertical bars) to create a timed lyric line with effects but no text. Standard timing and boundary linking remain available. Lyric display areas can extend beyond the canvas and reach 400% in width and height. Advanced → Background → Apply lyric background effects is on by default and also draws lyric background graphics over uploaded background media.
+
+### Retained lyrics without overlap
+
+Wrap lines in `{-` and `-}` to retain them like `{ … }` while avoiding overlap between their display areas. Adjust **Detailed → Techniques → Lyric overlap avoidance strength** from 0 (ordinary retained layering) to 1 (non-overlapping areas, default). Works with automatic placement off; positions are fixed for seeking. Areas shrink proportionally when necessary. Escape the braces (`\{` and `\}`) to display the delimiters literally.
