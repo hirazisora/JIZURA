@@ -310,18 +310,21 @@ function sizeViewport() {
 function syncMainMediaPreview() {
   if(!$('cutDetailsDialog')?.open&&!$('effectFavoritesDialog')?.open&&!($('exportDlg')?.open&&S.exportKind==='short'))J.syncMediaPreview(S.plan,S.t,S.playing);
 }
-function draw() {
-  const c = $('view'), ctx = c.getContext('2d');
-  if(!S.playPreparing)syncMainMediaPreview();
-  const t0 = performance.now();
+function drawPreviewFrame(ctx, {renderer=S.renderer,fast=false}={}) {
   const previewCuts = S.areaEdit && S.areaEdit.kind === 'lyric' && S.areaEdit.draft ? S.plan.cuts.filter(cut => cut.line === S.areaEdit.index) : [];
   const previousAreas = previewCuts.map(cut => cut.area);
   previewCuts.forEach(cut => { cut.area = { ...S.areaEdit.draft, angle: S.areaEdit.angle }; });
   const edit = S.areaEdit, mediaCut = edit && edit.kind !== 'lyric' && S.plan[edit.kind].cuts[edit.index];
   const previousMedia = mediaCut && { placement: mediaCut.placement, zoom: mediaCut.zoom, hold: mediaCut.hold, enter: mediaCut.enter, exit: mediaCut.exit, trans: mediaCut.trans };
   if (mediaCut) Object.assign(mediaCut, { placement: { cx: edit.draft.x + edit.draft.w / 2, cy: edit.draft.y + edit.draft.h / 2, w: edit.draft.w, h: edit.draft.h, lockAspect: edit.lockAspect, angle: edit.angle }, zoom: 100, hold: 'still', enter: 'cut', exit: 'cut', trans: undefined });
-  try { S.renderer.frame(ctx, S.plan, S.t, { scale: c.width / S.plan.W, fast: !!edit || S.playing && S.slow, noTrans: !!edit, noPost: !!edit, previewEdit: !!edit && edit.kind !== 'lyric', noForeground: !!edit && edit.kind === 'media' }); }
+  try { renderer.frame(ctx, S.plan, S.t, { scale: ctx.canvas.width / S.plan.W, fast, noTrans: !!edit, noPost: !!edit, previewEdit: !!edit && edit.kind !== 'lyric', noForeground: !!edit && edit.kind === 'media' }); }
   finally { previewCuts.forEach((cut, i) => { cut.area = previousAreas[i]; }); if (mediaCut) Object.assign(mediaCut, previousMedia); }
+}
+function draw() {
+  const c = $('view'), ctx = c.getContext('2d');
+  if(!S.playPreparing)syncMainMediaPreview();
+  const t0 = performance.now();
+  drawPreviewFrame(ctx,{fast:!!S.areaEdit || S.playing && S.slow});
   const dt = performance.now() - t0;
   S.slow = S.playing ? (dt > 30 ? true : dt < 14 ? false : S.slow) : false;
   updateTimeUI(); drawTimeline(); followTimelinePlayhead(); updateCutInfo(); drawItemFrames();
@@ -4202,14 +4205,21 @@ function bind() {
   $('effectFavorites').onclick=()=>openEffectFavorites();
   const screenshot=$('previewScreenshot');
   screenshot.textContent=J.mediaLabel('スクショ','Screenshot');
-  screenshot.title=J.mediaLabel('プレビューをPNGで保存','Save preview as PNG');
+  screenshot.title=J.mediaLabel('書き出し設定の解像度でプレビューをPNG保存','Save preview as PNG at the export resolution');
   screenshot.addEventListener('click',async()=>{
     screenshot.disabled=true;
     try{
       const filename=J.exportFilename(`${baseName()}_preview_${S.t.toFixed(3).replace('.','-')}`,'.png');
-      // Encode the displayed canvas directly, including the current video frame
-      // and preview edits. Re-rendering could capture a different frame.
-      const blob=await new Promise((resolve,reject)=>$('view').toBlob(blob=>blob?resolve(blob):reject(new Error(J.mediaLabel('PNGを作成できませんでした','Could not create PNG'))),'image/png'));
+      const [w,h]=J.outputSize(S.project),canvas=document.createElement('canvas');
+      canvas.width=w;canvas.height=h;
+      const previousRes=J.glyphs.maxRes;
+      try{
+        J.glyphs.maxRes=h>=1000?768:512;
+        // Render immediately from the current video frames and preview edits,
+        // without changing playback or enlarging the low-resolution preview.
+        drawPreviewFrame(canvas.getContext('2d'),{renderer:new J.Renderer()});
+      }finally{J.glyphs.maxRes=previousRes;}
+      const blob=await new Promise((resolve,reject)=>canvas.toBlob(blob=>blob?resolve(blob):reject(new Error(J.mediaLabel('PNGを作成できませんでした','Could not create PNG'))),'image/png'));
       await J.saveFile(filename,blob);
     }catch(error){toast(J.mediaLabel('スクショを保存できませんでした：','Could not save screenshot: ')+error.message);}
     finally{screenshot.disabled=false;}
