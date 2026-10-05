@@ -1288,7 +1288,11 @@ function openCutDetails(layer,index,part=0) {
       }else ((project.detailRandomExclusions ||= {})[pool.group] ||= {})[value]=true;
     }
   }
-  let detailSearchPopup=null;
+  let detailSearchPopup=null,detailFontPreviewMode='name';
+  const detailFontName=key=>{
+    const font=J.FONTS[key];if(!font)return key;
+    return font.composite?font.label:(J.faceOf?.(key).label||font.label||key);
+  };
   function closeDetailSearch(){detailSearchPopup?.remove();detailSearchPopup=null;}
   function attachDetailSearch(select){
     if(select.dataset.searchAttached)return;select.dataset.searchAttached='true';
@@ -1296,11 +1300,32 @@ function openCutDetails(layer,index,part=0) {
       if(select.disabled)return;
       closeDetailSearch();
       const popup=document.createElement('div');popup.className='detail-search-popup';popup.setAttribute('popover','auto');
+      const fontMenu=select.dataset.detailFont==='true';
+      const lyricText=fontMenu?String(refreshPreview().text??'').replace(/\s+/gu,' ').trim():'';
+      const chars=Array.from(lyricText),lyricSample=chars.slice(0,120).join('')+(chars.length>120?'…':'')||L('（歌詞なし）','(No lyrics)');
       const search=document.createElement('input');search.type='search';search.placeholder=L('あいまい検索','Fuzzy search');search.setAttribute('aria-label',search.placeholder);search.autocomplete='off';search.value=initial;
       const list=document.createElement('div');list.className='detail-search-options';list.setAttribute('role','listbox');
       list.setAttribute('aria-label',select.closest('label')?.querySelector('span')?.textContent||search.placeholder);
-      popup.append(search,list);dialog.append(popup);detailSearchPopup=popup;
+      popup.append(search);
+      const modes=[];
+      if(fontMenu){
+        const controls=document.createElement('div');controls.className='detail-font-preview-modes';controls.setAttribute('role','group');controls.setAttribute('aria-label',L('フォントの表示','Font preview'));
+        for(const [mode,ja,en] of [['name','フォント名を表示','Show font names'],['lyrics','歌詞を表示','Show lyrics']]){
+          const button=document.createElement('button');button.type='button';button.dataset.fontPreviewMode=mode;button.textContent=L(ja,en);
+          button.addEventListener('click',()=>{detailFontPreviewMode=mode;filter();search.focus({preventScroll:true});});controls.append(button);modes.push(button);
+        }
+        popup.append(controls);
+      }
+      popup.append(list);dialog.append(popup);detailSearchPopup=popup;
       let items=[],active=-1;
+      const fontRequests=new Set();
+      const fontSample=(key,text,size)=>{
+        const span=document.createElement('span');span.className='detail-font-sample';span.style.font=J.fontCSS(key,size);
+        if(J.FONTS[key]?.composite){
+          for(const char of text){const glyph=document.createElement('span');glyph.style.font=J.fontCSS(key,size,char);glyph.textContent=char;span.append(glyph);}
+        }else span.textContent=text;
+        return span;
+      };
       const highlight=index=>{
         active=index;items.forEach((item,i)=>{item.classList.toggle('active',i===active);item.setAttribute('aria-selected',String(i===active));});
         if(items[active]){search.setAttribute('aria-activedescendant',items[active].id);items[active].scrollIntoView({block:'nearest'});}
@@ -1314,19 +1339,33 @@ function openCutDetails(layer,index,part=0) {
       };
       const filter=()=>{
         list.replaceChildren();items=[];const matches=J.detailSearchQuery(search.value);let group=null;
+        const fontKeys=new Set(),fontTexts=[];
+        for(const button of modes)button.setAttribute('aria-pressed',String(button.dataset.fontPreviewMode===detailFontPreviewMode));
         for(const option of select.options){
           const parent=option.parentElement,groupName=parent.tagName==='OPTGROUP'?parent.label:'';
           if(option.disabled||parent.disabled||!matches(option.textContent+' '+option.value+' '+groupName))continue;
           if(groupName&&group!==groupName){const heading=document.createElement('div');heading.className='detail-search-group';heading.textContent=groupName;list.append(heading);}group=groupName;
           const item=document.createElement('div');item.setAttribute('role','option');item.id='cutDetailSearchOption'+items.length;item.textContent=option.textContent;
-          item.className='detail-search-option';item.dataset.value=option.value;item.onclick=()=>choose(option);list.append(item);items.push(item);
+          if(fontMenu&&J.FONTS[option.value]){
+            const key=option.value,name=option.textContent,sample=detailFontPreviewMode==='lyrics'?lyricSample:name;
+            item.classList.add('detail-font-option');item.replaceChildren(fontSample(key,sample,16));item.setAttribute('aria-label',name);item.title=name+(detailFontPreviewMode==='lyrics'?'\n'+sample:'');
+            if(detailFontPreviewMode==='lyrics'){const caption=fontSample(key,name,11);caption.classList.add('detail-font-name');item.append(caption);}
+            fontKeys.add(key);fontTexts.push(sample,name);
+            if(J.FONTS[key].composite)for(const char of sample+name)fontKeys.add(J.fontForChar(key,char));
+          }
+          item.classList.add('detail-search-option');item.dataset.value=option.value;item.onclick=()=>choose(option);list.append(item);items.push(item);
         }
         if(!items.length){const empty=document.createElement('div');empty.className='detail-search-empty';empty.textContent=L('該当する項目がありません','No matching options');empty.setAttribute('role','status');list.append(empty);}
         highlight(Math.max(0,items.findIndex(item=>item.dataset.value===select.value)));
+        if(fontKeys.size){
+          const keys=[...fontKeys],text=fontTexts.join(''),request=JSON.stringify([keys,text]);
+          if(!fontRequests.has(request)){fontRequests.add(request);J.ensureFonts(text,keys).catch(()=>{});}
+        }
       };
       search.addEventListener('input',filter);
       search.addEventListener('keydown',e=>{
         if(e.isComposing)return;
+        if(e.key==='Tab'&&fontMenu)return;
         if(['ArrowDown','ArrowUp','Enter','Escape','Tab'].includes(e.key)){
           if(e.key!=='Tab')e.preventDefault();e.stopPropagation();
           if(e.key==='Escape'||e.key==='Tab'){closeDetailSearch();select.focus();}
@@ -1335,6 +1374,12 @@ function openCutDetails(layer,index,part=0) {
         }
       });
       popup.addEventListener('click',e=>e.stopPropagation());
+      if(fontMenu){
+        popup.addEventListener('keydown',e=>{
+          if(e.key==='Escape'){e.preventDefault();e.stopPropagation();closeDetailSearch();select.focus();}
+          else if(e.key==='Tab')setTimeout(()=>{if(popup.isConnected&&!popup.contains(document.activeElement))closeDetailSearch();},0);
+        });
+      }
       popup.addEventListener('toggle',e=>{if(e.newState==='closed'){popup.remove();if(detailSearchPopup===popup)detailSearchPopup=null;}});
       const rect=select.getBoundingClientRect(),width=Math.min(Math.max(rect.width,240),innerWidth-16);
       popup.style.width=width+'px';popup.style.left=Math.max(8,Math.min(rect.left,innerWidth-width-8))+'px';
@@ -1440,10 +1485,13 @@ function openCutDetails(layer,index,part=0) {
     if(decorMode)value=value==='count'?'count':'index';
     const modeChoices=decorMode?(decorId==='indexNum'?[["index",L('少なく回転','Fewer digit rolls')],["count",L('多く回転','More digit rolls')]]:[["index",L('カットの通し番号','Cut number')],["count",L('開始値から終了値へ変化','Animate from start to end')]]):null;
     const choices=modeChoices || (/^fonts\.[^.]+\.\d+$/.test(path)||(path.startsWith('params.')&&typeof value==='string'&&J.FONTS[value])?Object.entries(J.FONTS).map(([id,d])=>[id,d.name||id]):/^effectEvents\.\d+\.type$/.test(path)?Object.entries(J.FXE).map(([id,d])=>[id,d.name||id]):field==='id'&&!path.startsWith('decor.')?null:options(field)); const input=document.createElement(choices?'select':field==='text'?'textarea':'input');input.dataset.detailField=path;
+    const fontChoice=choices&&(field==='font'||/^fonts\.[^.]+\.\d+$/.test(path)||(path.startsWith('params.')&&typeof value==='string'&&J.FONTS[value]));
+    if(fontChoice)input.dataset.detailFont='true';
     if(choices) { for(const [v,n] of choices) input.add(new Option(n,v));if(value!=null&&!choices.some(([v])=>String(v)===String(value))) input.add(new Option(String(value),String(value)));input.value=value??''; }
     else if(typeof value==='boolean'){input.type='checkbox';input.checked=value;}
     else if(typeof value==='number'){input.type='number';input.step='any';input.value=+(value*factor).toFixed(6); if(['w','h','n','inDur','outDur','transDur','duration','stagger','motionScale','contentScale','videoStart','videoDuration','opacity'].includes(field)) input.min=field==='videoDuration'?.04:0; if(field==='opacity')input.max=100;}
     else {if(field!=='text')input.type=/^#[0-9a-f]{6}$/i.test(value||'')?'color':'text';input.value=value??'';}
+    if(fontChoice){for(const option of input.options)if(J.FONTS[option.value])option.textContent=detailFontName(option.value);}
     if(lyric && field==='frontmost' && cut.emphasis){input.disabled=true;input.title=emphasisFrontmostHint();}
     if(typeof value==='number' && ['inDur','outDur','transDur'].includes(path))input.max=Math.max(0,current.end-current.start)*.45;
     input.addEventListener('change',()=>{
@@ -3044,25 +3092,6 @@ function commit() {              // call after changing the look
   const s = lookSnap();
   if (H.list[H.i] !== s) { H.list = H.list.slice(0, H.i + 1); H.list.push(s); H.i = H.list.length - 1; }
   if (H.list.length > 80) { H.list.splice(0, H.list.length - 80); H.i = H.list.length - 1; }
-  updateHist();
-}
-function histGo(d) {
-  if (S.exporting) return;
-  remember();                    // hand edits made since the last step become a stop of their own
-  const j = H.i + d; if (j < 0 || j >= H.list.length) return;
-  H.i = j;
-  const { mediaEffects, ...look } = JSON.parse(H.list[j]);
-  Object.assign(S.project, look);
-  for (const layer of ['foreground', 'media']) S.project[layer].effects = mediaEffects[layer];
-  fontKey = ''; syncUI(); replan(); updateHist();
-  toast(`${j + 1} / ${H.list.length} 案目`);
-  restartPreview();
-}
-function updateHist() {
-  const canB = H.i > 0, canF = H.i < H.list.length - 1;
-  ['btnPrev', 'btnPrev2'].forEach(id => { $(id).disabled = !canB; });
-  ['btnNext', 'btnNext2'].forEach(id => { $(id).disabled = !canF; });
-  $('histPos').textContent = H.list.length > 1 ? `${H.i + 1} / ${H.list.length}` : '';
 }
 
 /* ---------------- おまかせ ---------------- */
@@ -3230,7 +3259,7 @@ function renderFx() {
   $('seed').value = S.project.seed;
 }
 
-/* ---------------- technique tab ---------------- */
+/* ---------------- techniques in the lyrics tab ---------------- */
 const GROUPS = [['layout', 'レイアウト'], ['enter', '登場'], ['hold', '保持'], ['exit', '退場'], ['decor', '装飾'], ['treat', '文字の加工'], ['bg', '背景'], ['cam', 'カメラ'], ['fx', '画面効果'], ['trans', 'カット間のつなぎ']];
 const openGroups = new Set();
 function techItems(g) { return J.order(g).filter(k => J.registry(g)[k] && !J.registry(g)[k].special); }
@@ -3238,7 +3267,7 @@ function renderTech() {
   const lyricEffects = J.lyricEffectSettings(S.project);
   $('lyricAutoPlacement').checked = lyricEffects.autoPlacement;
   $('lyricAvoidForeground').checked = lyricEffects.avoidForeground;
-  // 「画面中央を避ける」 (詳細 > 手法) and 「歌詞が画面中央を避ける」 (かんたん) are the same setting.
+  // 「画面中央を避ける」 (詳細 > 歌詞) and 「歌詞が画面中央を避ける」 (かんたん) are the same setting.
   for (const input of document.querySelectorAll('.avoid-center-toggle')) input.checked = lyricEffects.avoidCenter && lyricEffects.autoPlacement;
   $('lyricAvoidCenter').disabled = !lyricEffects.autoPlacement;
   $('lyricGroupAvoidanceStrength').value = lyricEffects.lyricAvoidanceStrength;
@@ -3429,7 +3458,7 @@ function syncExportSettingsVisibility() {
   for(const id of ['outAspect','outRes','outVideoSize'])$(id).closest('label').hidden=short;
   for(const id of ['outVideoWidth','outVideoHeight'])$(id).closest('label').hidden=short||$('outVideoSize').value!=='custom';
   $('outQuality').closest('label').hidden=!mp4;
-  $('outAudio').closest('label').hidden=!mp4;
+  $('outAudio').closest('label').hidden=!inDialog||!mp4;
   $('outBitrate').closest('label').hidden=!mp4||S.project.quality!=='custom';
   $('outQP').closest('label').hidden=$('outQPNote').hidden=!mp4||S.project.quality!=='qp';
   $('outKey').closest('label').hidden=transparent||short;
@@ -3475,16 +3504,15 @@ let codecNoteVersion=0;
 async function codecNote() {
   const version=++codecNoteVersion,isQP=S.project.quality==='qp';
   const project=activeExportProject(),[w, h] = J.outputSize(project);
-  let bitrate;try{if(isQP)J.videoQuantizer(project);else bitrate=J.videoBitrate(project);}catch(err){$('codecNote').textContent=err.message;$('btnMP4').disabled=true;$('btnShort').disabled=true;$('eMP4').disabled=true;return;}
+  let bitrate;try{if(isQP)J.videoQuantizer(project);else bitrate=J.videoBitrate(project);}catch(err){$('codecNote').textContent=err.message;$('btnMP4').disabled=true;$('btnShort').disabled=true;return;}
   const vc = await J.pickVideoCodec(w, h, S.project.fps, bitrate,{bitrateMode:isQP?'quantizer':'variable'});
   if(version!==codecNoteVersion||S.exporting)return;
   $('codecNote').textContent = vc ? `このブラウザでは ${vc.label} で書き出します（${w}×${h} / ${S.project.fps}fps）。書き出し中はタブを開いたままにしてください。` : 'このブラウザは動画エンコード（WebCodecs）に対応していません。Chrome / Edge の最新版で開くか、連番PNGを使ってください。';
-  $('btnMP4').disabled = !vc; $('eMP4').disabled = !vc;
+  $('btnMP4').disabled = !vc;
   $('btnShort').disabled=!vc||shortExportActive()&&!shortRangeValid();
   if(!vc&&isQP)$('codecNote').textContent=J.mediaLabel('このブラウザは画質優先（QP指定）に対応していません。別の画質設定または連番PNGを使用してください。','This browser does not support QP encoding. Choose another quality setting or a PNG sequence.');
-  if (!vc) $('eMP4').title = 'このブラウザは MP4 書き出しに対応していません（Chrome / Edge 推奨）';
 }
-const EXP_BTNS = ['btnMP4', 'btnShort', 'btnPNG', 'btnPNGA', 'eMP4'];
+const EXP_BTNS = ['btnMP4', 'btnShort', 'btnPNG', 'btnPNGA'];
 function openExportDialog(kind) {
   if (S.exporting) return;
   pause();
@@ -3555,7 +3583,7 @@ async function runExport(kind) {
   pause();
   if(kind==='short')stopShortPreview();
   const ac = new AbortController(); S.exporting = ac;
-  const settingsInputs = [...$('exportSettings').querySelectorAll('input,select'),...$('shortExportOptions').querySelectorAll('input,select,button'),$('exportFilename')].map(el=>[el,el.disabled]);
+  const settingsInputs = [...$('exportSettings').querySelectorAll('input,select'),...$('shortExportOptions').querySelectorAll('input,select,button'),$('outAudio'),$('exportFilename')].map(el=>[el,el.disabled]);
   settingsInputs.forEach(([el])=>{el.disabled=true;}); $('btnCloseExport').disabled = true;
   const boxes = [...document.querySelectorAll('.exp-box')];
   const setText = m => boxes.forEach(b => { b.querySelector('.exp-text').textContent = m; });
@@ -4493,7 +4521,6 @@ function bind() {
   $('btnPNG').addEventListener('click', () => runExport('png'));
   $('btnPNGA').addEventListener('click', () => runExport('pnga'));
   document.querySelectorAll('.exp-cancel').forEach(b => b.addEventListener('click', () => { if (S.exporting) S.exporting.abort(); }));
-  $('eMP4').addEventListener('click', () => runExport('mp4'));
   // かんたんモード
   $('modeEasy').addEventListener('click', () => toggleSettingsDrawer('easy'));
   $('modePro').addEventListener('click', () => toggleSettingsDrawer('pro'));
@@ -4504,9 +4531,6 @@ function bind() {
   window.addEventListener('resize',positionSettingsDrawer);
   if(window.ResizeObserver)new ResizeObserver(positionSettingsDrawer).observe(document.querySelector('.bar'));
   $('btnOmakase').addEventListener('click', omakase);
-  $('btnOmakaseBig').addEventListener('click', omakase);
-  ['btnPrev', 'btnPrev2'].forEach(id => $(id).addEventListener('click', () => histGo(-1)));
-  ['btnNext', 'btnNext2'].forEach(id => $(id).addEventListener('click', () => histGo(1)));
   $('eStyle').addEventListener('click', () => rerollPart('style'));
   $('eMood').addEventListener('click', () => rerollPart('mood'));
   $('eCut').addEventListener('click', () => rerollPart('cut'));
