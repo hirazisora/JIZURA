@@ -3,7 +3,9 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const path = require('node:path');
 const context = vm.createContext({ window: {} });
-for (const file of ['01_util.js', '08d_media.js']) vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'src', file), 'utf8'), context);
+vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'src', '01_util.js'), 'utf8'), context);
+for (const key of ['LAYOUT_ORDER', 'ENTER_ORDER', 'EXIT_ORDER', 'HOLD_ORDER', 'DECOR_ORDER']) context.window.J[key] = [];
+for (const file of ['08_planner.js', '08ca_apng.js', '08d_media.js']) vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'src', file), 'utf8'), context);
 const J = context.window.J;
 // This unit harness isolates the media planner from the optional effects module.
 J.mediaEffectSettings = () => ({applyLyricBackground:true});

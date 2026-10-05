@@ -126,7 +126,8 @@ J.mediaCopySource = (plan,cut,t,owner,w,h) => {
   if(!J.isMediaCopy(cut.itemId))return null;
   if(cut.itemId==='@copy:foreground-source') {
     const foreground=J.mediaAt(plan,t,'foreground');
-    return foreground&&J.mediaAssets.get(foreground.itemId)?.element || null;
+    const asset=foreground&&J.mediaAssets.get(foreground.itemId);
+    return asset?J.mediaFrameSource(asset,foreground,t):null;
   }
   const renderer=owner.copyRenderer || (owner.copyRenderer=new J.Renderer());
   const canvas=owner.copySourceCanvas || (owner.copySourceCanvas=document.createElement('canvas'));
@@ -180,7 +181,7 @@ J.planMedia = (project, lyricPlan, audioDuration, layer = 'media') => {
   let duration = fixedDuration != null
     ? Math.max(fixedDuration, lyricPlan.duration, fixedMinimum)
     : Math.max(lyricPlan.duration, audioDuration || 0,
-      manualEnd, lyricPlan.lines.length ? 0 : Array.from({ length: count }, (_, i) => itemAt(i)).reduce((n, x) => n + (x && x.type === 'video' ? J.clamp(+x.duration || 4, 1, 12) : 4), 0));
+      manualEnd, lyricPlan.lines.length ? 0 : Array.from({ length: count }, (_, i) => itemAt(i)).reduce((n, x) => n + (x && x.type === 'video' ? J.clamp(+x.duration || 4, 1, 12) : x?.animation ? x.animation.duration*(x.animation.plays||1) : 4), 0));
   const lyricCount = Math.min(count, lyricPlan.lines.length);
   const starts = Array.from({ length: count }, (_, i) => {
     const v = m.timing.lineTimes[i];
@@ -208,6 +209,7 @@ J.planMedia = (project, lyricPlan, audioDuration, layer = 'media') => {
       treat: ov.treat || (reroll ? rng.pick(Object.keys(J.MEDIA_TREAT)) : 'none'),
       blend: ['normal','multiply','screen','overlay'].includes(ov.blend) ? ov.blend : m.blend,
       opacity: ov.opacity != null && Number.isFinite(+ov.opacity) ? J.clamp(+ov.opacity,0,100) : m.opacity,
+      ...(item?.animation?{animation:item.animation,animationLoop:['once','loop'].includes(ov.animationLoop)?ov.animationLoop:'auto',animationStart:Math.max(0,+ov.animationStart||0)}:{}),
       zoom: 100, focus: 'mc',
       videoStart: item?.type === 'video' && Number.isFinite(+ov.videoStart) ? Math.max(0,+ov.videoStart) : 0,
       videoLoop: !!item && item.type === 'video' && ov.videoLoop !== false,
@@ -347,6 +349,8 @@ J.removeMedia = async id => {
 };
 J.releaseMediaAsset = asset => {
   if (!asset) return;
+  if(asset.animation)J.releaseAPNG(asset.animation);
+  if(asset.posterUrl)URL.revokeObjectURL(asset.posterUrl);
   if (asset.element && asset.type === 'video') {
     previewVideoWarmups.get(asset.element)?.abort();previewVideoWarmups.delete(asset.element);
     asset.element.pause(); asset.element.removeAttribute('src'); asset.element.load();
@@ -357,6 +361,18 @@ J.releaseMediaAsset = asset => {
 J.attachMedia = async (item, file, assets = J.mediaAssets, onProgress = () => {}) => {
   file = await J.snapshotMediaFile(file,(loaded,total)=>onProgress({phase:'read',loaded,total}));
   onProgress({phase:'decode'});
+  if(item.type==='image' && (/image\/(?:png|apng)/i.test(file.type)||/\.(?:png|apng)$/i.test(item.name))){
+    const animation=await J.decodeAPNG(file,onProgress);
+    if(animation){
+      const previous=assets.get(item.id);if(previous)J.releaseMediaAsset(previous);
+      item.width=animation.element.width;item.height=animation.element.height;
+      item.animation={format:'apng',frames:animation.frames.length,duration:animation.duration,plays:animation.plays};
+      const posterUrl=URL.createObjectURL(animation.defaultImage),posterElement=new Image();posterElement.src=posterUrl;
+      assets.set(item.id,{element:animation.element,type:'image',animation,poster:posterUrl,posterUrl,posterElement,file});
+      return animation.element;
+    }
+    delete item.animation;
+  }
   return new Promise((resolve, reject) => {
   const previous = assets.get(item.id); if (previous) J.releaseMediaAsset(previous);
   const url = URL.createObjectURL(file);
@@ -437,6 +453,7 @@ const captureMediaVideo = (plan, cut, layer) => {
   else J.foregroundTransitionFrame = { plan, index: cut.index, canvas: c };
 };
 J.prepareMediaFrame = async (plan, t, signal) => {
+  await J.prepareAPNGFrames(plan,t,signal);
   for (const layer of ['media', 'foreground']) {
     if(plan.layerVisibility?.[layer]===false)continue;
     const cut = J.mediaAt(plan, t, layer); if (!cut) continue;
@@ -455,6 +472,7 @@ const playMediaPreview = asset => {
   pending.catch(()=>{}).finally(()=>{if(asset.previewPlayPending===pending)asset.previewPlayPending=null;});
 };
 J.syncMediaPreview = (plan, t, playing) => {
+  if([...J.mediaAssets.values()].some(asset=>asset.animation))J.prepareAPNGFrames(plan,t).catch(()=>{});
   const active = new Map();
   for (const layer of ['media', 'foreground']) {
     if(plan.layerVisibility?.[layer]===false)continue;
@@ -558,7 +576,7 @@ J.chromaSource = (src, cut, w, h) => {
 };
 J.drawMediaCut = (ctx, cut, t, options = {}) => {
   const asset = J.mediaAssets.get(cut.itemId); if (!asset && !options.source) return false;
-  const src = options.source || asset.element, sw = src.videoWidth || src.naturalWidth || src.width, sh = src.videoHeight || src.naturalHeight || src.height;
+  const src = options.source || J.mediaFrameSource(asset,cut,t), sw = src.videoWidth || src.naturalWidth || src.width, sh = src.videoHeight || src.naturalHeight || src.height;
   if (!sw || !sh) return false;
   const personFrame = options.personPass ? J.personMaskFrame?.(cut,t) : null;
   if(options.personPass && (!personFrame || options.personMode && !J.personCutout(cut)?.[options.personMode]))return false;

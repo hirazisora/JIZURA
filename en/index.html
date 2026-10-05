@@ -981,7 +981,7 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 
       <div class="sec" id="mediaPane" hidden>
         <div class="sec-h media-pane-heading"><h2 id="mediaPaneTitle">Background</h2></div>
-        <div class="media-upload-row"><p class="hint">Drop images or videos here, or use Add to select files. Files are stored in this browser.</p><label class="file">New<input id="mediaFiles" type="file" accept="image/*,video/*" multiple></label></div>
+        <div class="media-upload-row"><p class="hint">Drop images or videos here, or use Add to select files. Files are stored in this browser.</p><label class="file">New<input id="mediaFiles" type="file" accept="image/*,video/*,.apng" multiple></label></div>
         <div id="mediaList" class="media-list"></div>
         <div id="mediaCutInsert" class="media-lyric-insert">
           <fieldset id="backgroundInsertSources" hidden><legend>Items to insert in bulk</legend></fieldset>
@@ -5015,6 +5015,120 @@ J.composeLyricArea = (cut, { w, h, obstacles = [], zone = null, fgCenter = null,
 };
 })();
 
+/* APNG frame timing and composition. Each frame is decoded as a static PNG,
+   so preview, seeking and export use the project clock rather than an <img> clock. */
+(() => {
+'use strict';
+const signature=new Uint8Array([137,80,78,71,13,10,26,10]);
+const crcTable=Uint32Array.from({length:256},(_,n)=>{for(let i=0;i<8;i++)n=n&1?0xedb88320^(n>>>1):n>>>1;return n>>>0;});
+const crc=bytes=>{let n=0xffffffff;for(const b of bytes)n=crcTable[(n^b)&255]^(n>>>8);return (n^0xffffffff)>>>0;};
+const chunk=(name,data)=>{const bytes=new Uint8Array(data.length+12),view=new DataView(bytes.buffer);view.setUint32(0,data.length);for(let i=0;i<4;i++)bytes[4+i]=name.charCodeAt(i);bytes.set(data,8);view.setUint32(data.length+8,crc(bytes.subarray(4,data.length+8)));return bytes;};
+const invalid=()=>new Error(J.mediaLabel('APNG ファイルが壊れています','Invalid APNG file'));
+J.parseAPNG=buffer=>{
+  const bytes=buffer instanceof Uint8Array?buffer:new Uint8Array(buffer);
+  if(bytes.length<8||!signature.every((b,i)=>bytes[i]===b))return null;
+  const view=new DataView(bytes.buffer,bytes.byteOffset,bytes.byteLength),chunks=[];
+  for(let offset=8;offset<bytes.length;){
+    if(offset+12>bytes.length)throw invalid();
+    const length=view.getUint32(offset);if(length>bytes.length-offset-12)throw invalid();
+    const name=String.fromCharCode(...bytes.subarray(offset+4,offset+8)),data=bytes.subarray(offset+8,offset+8+length);
+    chunks.push({name,data,raw:bytes.subarray(offset,offset+length+12),crc:view.getUint32(offset+length+8)});offset+=length+12;
+    if(name==='IEND'){if(offset!==bytes.length)throw invalid();break;}
+  }
+  if(!chunks.some(c=>c.name==='acTL'))return null;
+  if(chunks[0]?.name!=='IHDR'||chunks[0].data.length!==13||chunks.at(-1)?.name!=='IEND')throw invalid();
+  for(const c of chunks)if(crc(c.raw.subarray(4,c.raw.length-4))!==c.crc)throw invalid();
+  const header=chunks[0].data,head=new DataView(header.buffer,header.byteOffset,header.byteLength),width=head.getUint32(0),height=head.getUint32(4);
+  let control=null,frame=null,sequence=0,seenIDAT=false;const frames=[],shared=[],defaultData=[];
+  const finish=()=>{if(frame){if(!frame.data.length)throw invalid();frames.push(frame);frame=null;}};
+  for(const c of chunks.slice(1)){
+    const d=new DataView(c.data.buffer,c.data.byteOffset,c.data.byteLength);
+    if(c.name==='acTL'){
+      if(control||seenIDAT||c.data.length!==8)throw invalid();control={frames:d.getUint32(0),plays:d.getUint32(4)};if(!control.frames)throw invalid();
+    }else if(c.name==='fcTL'){
+      if(!control||c.data.length!==26||d.getUint32(0)!==sequence++)throw invalid();finish();
+      frame={width:d.getUint32(4),height:d.getUint32(8),x:d.getUint32(12),y:d.getUint32(16),delay:Math.max(.01,d.getUint16(20)/(d.getUint16(22)||100)),dispose:d.getUint8(24),blend:d.getUint8(25),data:[]};
+      if(!frame.width||!frame.height||frame.x+frame.width>width||frame.y+frame.height>height||frame.dispose>2||frame.blend>1)throw invalid();
+      if(!seenIDAT&&(frame.x||frame.y||frame.width!==width||frame.height!==height))throw invalid();
+    }else if(c.name==='IDAT'){
+      if(!control||frames.length)throw invalid();seenIDAT=true;defaultData.push(c.data);if(frame)frame.data.push(c.data);
+    }else if(c.name==='fdAT'){
+      if(!frame||!seenIDAT||c.data.length<4||d.getUint32(0)!==sequence++)throw invalid();frame.data.push(c.data.subarray(4));
+    }else if(c.name==='IEND')finish();
+    else if(!seenIDAT)shared.push(c.raw);
+  }
+  if(!control||frames.length!==control.frames||!defaultData.length)throw invalid();
+  const png=(w,h,parts)=>{const ihdr=header.slice(),v=new DataView(ihdr.buffer);v.setUint32(0,w);v.setUint32(4,h);return new Blob([signature,chunk('IHDR',ihdr),...shared,...parts.map(p=>chunk('IDAT',p)),chunk('IEND',new Uint8Array())],{type:'image/png'});};
+  for(const f of frames){f.png=png(f.width,f.height,f.data);delete f.data;}
+  return {width,height,plays:control.plays,frames,defaultImage:png(width,height,defaultData)};
+};
+const decodeImage=async blob=>{
+  if(typeof createImageBitmap==='function')return createImageBitmap(blob);
+  const image=new Image(),url=URL.createObjectURL(blob);
+  try{image.src=url;await image.decode();return image;}catch(error){image.removeAttribute('src');throw error;}finally{URL.revokeObjectURL(url);}
+};
+const closeImage=image=>{if(image?.close)image.close();else image?.removeAttribute?.('src');};
+const canvasBlob=canvas=>new Promise((resolve,reject)=>canvas.toBlob(blob=>blob?resolve(blob):reject(new Error('Could not prepare APNG frame')),'image/png'));
+J.decodeAPNG=async(file,onProgress=()=>{})=>{
+  const parsed=J.parseAPNG(await file.arrayBuffer());if(!parsed)return null;
+  const canvas=document.createElement('canvas');canvas.width=parsed.width;canvas.height=parsed.height;
+  const ctx=canvas.getContext('2d'),element=document.createElement('canvas');element.width=canvas.width;element.height=canvas.height;
+  const frames=[],ends=[];let duration=0;
+  for(const [index,frame] of parsed.frames.entries()){
+    const previous=frame.dispose===2&&index?ctx.getImageData(frame.x,frame.y,frame.width,frame.height):null;
+    const image=await decodeImage(frame.png);
+    try{if(frame.blend===0)ctx.clearRect(frame.x,frame.y,frame.width,frame.height);ctx.drawImage(image,frame.x,frame.y);}finally{closeImage(image);}
+    if(index===0)element.getContext('2d').drawImage(canvas,0,0);
+    frames.push(await canvasBlob(canvas));duration+=frame.delay;ends.push(duration);
+    if(frame.dispose===1||frame.dispose===2&&!index)ctx.clearRect(frame.x,frame.y,frame.width,frame.height);
+    else if(previous)ctx.putImageData(previous,frame.x,frame.y);
+    onProgress({phase:'decode',frame:index+1,total:parsed.frames.length});
+  }
+  canvas.width=canvas.height=1;
+  return {element,defaultImage:parsed.defaultImage,frames,ends,duration,plays:parsed.plays,cache:new Map(),pending:new Map(),pins:new Set(),limit:Math.max(2,Math.floor(32*1024*1024/(element.width*element.height*4))),released:false};
+};
+J.apngFrameIndex=(animation,cut,t)=>{
+  const elapsed=Math.max(0,+cut.animationStart||0)+Math.max(0,t-cut.start),plays=cut.animationLoop==='loop'?0:cut.animationLoop==='once'?1:animation.plays;
+  if(plays&&elapsed>=animation.duration*plays-1e-9)return animation.frames.length-1;
+  const local=elapsed%animation.duration;let lo=0,hi=animation.ends.length-1;
+  while(lo<hi){const mid=(lo+hi)>>>1;if(animation.ends[mid]<=local+1e-9)lo=mid+1;else hi=mid;}
+  return lo;
+};
+const prune=(animation,keep)=>{for(const [index,image] of animation.cache){if(animation.cache.size<=animation.limit)break;if(index!==keep&&!animation.pins.has(index)){animation.cache.delete(index);closeImage(image);}}};
+J.apngFrame=async(asset,index)=>{
+  const a=asset.animation;if(a.released)throw new Error('APNG asset released');if(index===0)return a.element;
+  if(a.cache.has(index)){const image=a.cache.get(index);a.cache.delete(index);a.cache.set(index,image);return image;}
+  if(a.pending.has(index))return a.pending.get(index);
+  const pending=(async()=>{const image=await decodeImage(a.frames[index]);if(a.released){closeImage(image);throw new Error('APNG asset released');}a.cache.set(index,image);prune(a,index);window.dispatchEvent(new Event('jizura-media-ready'));return image;})();
+  a.pending.set(index,pending);try{return await pending;}finally{a.pending.delete(index);}
+};
+J.mediaFrameSource=(asset,cut,t)=>{
+  if(!asset.animation)return asset.element;const a=asset.animation,index=J.apngFrameIndex(a,cut,t);
+  if(index===0)return a.element;if(a.cache.has(index))return a.cache.get(index);
+  if(!a.pending.has(index))J.apngFrame(asset,index).catch(error=>{if(!a.released&&!asset.previewError){asset.previewError=error.message;window.dispatchEvent(new CustomEvent('jizura-media-error',{detail:{id:cut.itemId,message:error.message}}));}});
+  return a.element;
+};
+J.prepareAPNGFrames=async(plan,t,signal)=>{
+  if(signal?.aborted)throw new Error('Cancelled');const requests=new Map();
+  const add=(cut,time)=>{const asset=cut&&J.mediaAssets.get(cut.itemId);if(!asset?.animation)return;let indices=requests.get(asset);if(!indices)requests.set(asset,indices=new Set());indices.add(J.apngFrameIndex(asset.animation,cut,time));};
+  const effects=J.cutAt?.(plan,t)?.effectFx||plan.fx,step=effects&&J.stepDur?.(effects,plan.fps),lyricTime=step?Math.floor(t/step+1e-6)*step:t;
+  const times=[t],lyric=J.cutAt?.(plan,lyricTime),prior=lyric?.index>0&&plan.cuts[lyric.index-1];
+  if(lyric?.trans&&prior&&lyricTime-lyric.start<(lyric.transDur||.35)&&Math.abs(prior.end-lyric.start)<.06)times.push(Math.max(prior.start,prior.end-.001));
+  for(const time of times)for(const layer of ['media','foreground']){
+    if(plan.layerVisibility?.[layer]===false)continue;
+    for(const cut of J.mediaCutsAt(plan,time,layer)){
+      add(cut,time);const prev=cut.index>0&&plan[layer].cuts[cut.index-1];
+      if(prev&&cut.trans&&time-cut.start<cut.transDur&&Math.abs(prev.end-cut.start)<.06)add(prev,Math.max(prev.start,prev.end-.001));
+      if(cut.itemId==='@copy:foreground-source')add(J.mediaAt(plan,time,'foreground'),time);
+    }
+  }
+  for(const asset of J.mediaAssets.values())if(asset.animation){asset.animation.pins=requests.get(asset)||new Set();prune(asset.animation);}
+  await Promise.all([...requests].flatMap(([asset,indices])=>[...indices].map(index=>J.apngFrame(asset,index))));
+  if(signal?.aborted)throw new Error('Cancelled');
+};
+J.releaseAPNG=animation=>{animation.released=true;for(const image of animation.cache.values())closeImage(image);animation.cache.clear();animation.frames.length=0;animation.element.width=animation.element.height=1;};
+})();
+
 /* Dynamic background layouts (詳細 → 背景 → 背景をダイナミックに配置).
    A layout frames the background through a mask window (circle, half, band, frame…) on the STAGE and
    places the source to fill that window. Lyrics and the foreground then compose around it: each layout
@@ -5408,7 +5522,8 @@ J.mediaCopySource = (plan,cut,t,owner,w,h) => {
   if(!J.isMediaCopy(cut.itemId))return null;
   if(cut.itemId==='@copy:foreground-source') {
     const foreground=J.mediaAt(plan,t,'foreground');
-    return foreground&&J.mediaAssets.get(foreground.itemId)?.element || null;
+    const asset=foreground&&J.mediaAssets.get(foreground.itemId);
+    return asset?J.mediaFrameSource(asset,foreground,t):null;
   }
   const renderer=owner.copyRenderer || (owner.copyRenderer=new J.Renderer());
   const canvas=owner.copySourceCanvas || (owner.copySourceCanvas=document.createElement('canvas'));
@@ -5462,7 +5577,7 @@ J.planMedia = (project, lyricPlan, audioDuration, layer = 'media') => {
   let duration = fixedDuration != null
     ? Math.max(fixedDuration, lyricPlan.duration, fixedMinimum)
     : Math.max(lyricPlan.duration, audioDuration || 0,
-      manualEnd, lyricPlan.lines.length ? 0 : Array.from({ length: count }, (_, i) => itemAt(i)).reduce((n, x) => n + (x && x.type === 'video' ? J.clamp(+x.duration || 4, 1, 12) : 4), 0));
+      manualEnd, lyricPlan.lines.length ? 0 : Array.from({ length: count }, (_, i) => itemAt(i)).reduce((n, x) => n + (x && x.type === 'video' ? J.clamp(+x.duration || 4, 1, 12) : x?.animation ? x.animation.duration*(x.animation.plays||1) : 4), 0));
   const lyricCount = Math.min(count, lyricPlan.lines.length);
   const starts = Array.from({ length: count }, (_, i) => {
     const v = m.timing.lineTimes[i];
@@ -5490,6 +5605,7 @@ J.planMedia = (project, lyricPlan, audioDuration, layer = 'media') => {
       treat: ov.treat || (reroll ? rng.pick(Object.keys(J.MEDIA_TREAT)) : 'none'),
       blend: ['normal','multiply','screen','overlay'].includes(ov.blend) ? ov.blend : m.blend,
       opacity: ov.opacity != null && Number.isFinite(+ov.opacity) ? J.clamp(+ov.opacity,0,100) : m.opacity,
+      ...(item?.animation?{animation:item.animation,animationLoop:['once','loop'].includes(ov.animationLoop)?ov.animationLoop:'auto',animationStart:Math.max(0,+ov.animationStart||0)}:{}),
       zoom: 100, focus: 'mc',
       videoStart: item?.type === 'video' && Number.isFinite(+ov.videoStart) ? Math.max(0,+ov.videoStart) : 0,
       videoLoop: !!item && item.type === 'video' && ov.videoLoop !== false,
@@ -5629,6 +5745,8 @@ J.removeMedia = async id => {
 };
 J.releaseMediaAsset = asset => {
   if (!asset) return;
+  if(asset.animation)J.releaseAPNG(asset.animation);
+  if(asset.posterUrl)URL.revokeObjectURL(asset.posterUrl);
   if (asset.element && asset.type === 'video') {
     previewVideoWarmups.get(asset.element)?.abort();previewVideoWarmups.delete(asset.element);
     asset.element.pause(); asset.element.removeAttribute('src'); asset.element.load();
@@ -5639,6 +5757,18 @@ J.releaseMediaAsset = asset => {
 J.attachMedia = async (item, file, assets = J.mediaAssets, onProgress = () => {}) => {
   file = await J.snapshotMediaFile(file,(loaded,total)=>onProgress({phase:'read',loaded,total}));
   onProgress({phase:'decode'});
+  if(item.type==='image' && (/image\/(?:png|apng)/i.test(file.type)||/\.(?:png|apng)$/i.test(item.name))){
+    const animation=await J.decodeAPNG(file,onProgress);
+    if(animation){
+      const previous=assets.get(item.id);if(previous)J.releaseMediaAsset(previous);
+      item.width=animation.element.width;item.height=animation.element.height;
+      item.animation={format:'apng',frames:animation.frames.length,duration:animation.duration,plays:animation.plays};
+      const posterUrl=URL.createObjectURL(animation.defaultImage),posterElement=new Image();posterElement.src=posterUrl;
+      assets.set(item.id,{element:animation.element,type:'image',animation,poster:posterUrl,posterUrl,posterElement,file});
+      return animation.element;
+    }
+    delete item.animation;
+  }
   return new Promise((resolve, reject) => {
   const previous = assets.get(item.id); if (previous) J.releaseMediaAsset(previous);
   const url = URL.createObjectURL(file);
@@ -5719,6 +5849,7 @@ const captureMediaVideo = (plan, cut, layer) => {
   else J.foregroundTransitionFrame = { plan, index: cut.index, canvas: c };
 };
 J.prepareMediaFrame = async (plan, t, signal) => {
+  await J.prepareAPNGFrames(plan,t,signal);
   for (const layer of ['media', 'foreground']) {
     if(plan.layerVisibility?.[layer]===false)continue;
     const cut = J.mediaAt(plan, t, layer); if (!cut) continue;
@@ -5737,6 +5868,7 @@ const playMediaPreview = asset => {
   pending.catch(()=>{}).finally(()=>{if(asset.previewPlayPending===pending)asset.previewPlayPending=null;});
 };
 J.syncMediaPreview = (plan, t, playing) => {
+  if([...J.mediaAssets.values()].some(asset=>asset.animation))J.prepareAPNGFrames(plan,t).catch(()=>{});
   const active = new Map();
   for (const layer of ['media', 'foreground']) {
     if(plan.layerVisibility?.[layer]===false)continue;
@@ -5840,7 +5972,7 @@ J.chromaSource = (src, cut, w, h) => {
 };
 J.drawMediaCut = (ctx, cut, t, options = {}) => {
   const asset = J.mediaAssets.get(cut.itemId); if (!asset && !options.source) return false;
-  const src = options.source || asset.element, sw = src.videoWidth || src.naturalWidth || src.width, sh = src.videoHeight || src.naturalHeight || src.height;
+  const src = options.source || J.mediaFrameSource(asset,cut,t), sw = src.videoWidth || src.naturalWidth || src.width, sh = src.videoHeight || src.naturalHeight || src.height;
   if (!sw || !sh) return false;
   const personFrame = options.personPass ? J.personMaskFrame?.(cut,t) : null;
   if(options.personPass && (!personFrame || options.personMode && !J.personCutout(cut)?.[options.personMode]))return false;
@@ -42251,14 +42383,14 @@ function sizeViewport() {
 function syncMainMediaPreview() {
   if(!$('cutDetailsDialog')?.open&&!$('effectFavoritesDialog')?.open&&!($('exportDlg')?.open&&S.exportKind==='short'))J.syncMediaPreview(S.plan,S.t,S.playing);
 }
-function drawPreviewFrame(ctx, {renderer=S.renderer,fast=false}={}) {
+function drawPreviewFrame(ctx, {renderer=S.renderer,fast=false,time=S.t}={}) {
   const previewCuts = S.areaEdit && S.areaEdit.kind === 'lyric' && S.areaEdit.draft ? S.plan.cuts.filter(cut => cut.line === S.areaEdit.index) : [];
   const previousAreas = previewCuts.map(cut => cut.area);
   previewCuts.forEach(cut => { cut.area = { ...S.areaEdit.draft, angle: S.areaEdit.angle }; });
   const edit = S.areaEdit, mediaCut = edit && edit.kind !== 'lyric' && S.plan[edit.kind].cuts[edit.index];
   const previousMedia = mediaCut && { placement: mediaCut.placement, zoom: mediaCut.zoom, hold: mediaCut.hold, enter: mediaCut.enter, exit: mediaCut.exit, trans: mediaCut.trans };
   if (mediaCut) Object.assign(mediaCut, { placement: { cx: edit.draft.x + edit.draft.w / 2, cy: edit.draft.y + edit.draft.h / 2, w: edit.draft.w, h: edit.draft.h, lockAspect: edit.lockAspect, angle: edit.angle }, zoom: 100, hold: 'still', enter: 'cut', exit: 'cut', trans: undefined });
-  try { renderer.frame(ctx, S.plan, S.t, { scale: ctx.canvas.width / S.plan.W, fast, noTrans: !!edit, noPost: !!edit, previewEdit: !!edit && edit.kind !== 'lyric', noForeground: !!edit && edit.kind === 'media' }); }
+  try { renderer.frame(ctx, S.plan, time, { scale: ctx.canvas.width / S.plan.W, fast, noTrans: !!edit, noPost: !!edit, previewEdit: !!edit && edit.kind !== 'lyric', noForeground: !!edit && edit.kind === 'media' }); }
   finally { previewCuts.forEach((cut, i) => { cut.area = previousAreas[i]; }); if (mediaCut) Object.assign(mediaCut, previousMedia); }
 }
 function draw() {
@@ -43153,6 +43285,7 @@ function openCutDetails(layer,index,part=0) {
     motionScale:['動きの倍率','Motion scale'],contentScale:['Textサイズ倍率','Text scale'],effectSettings:['Effectsパラメータ','Effect parameters'],
     motion:['Motion strength','Motion amount'],treatment:['Treatmentの強さ','Treatment amount'],duration:['Entrance · Exit時間（s）','Entrance / exit duration (s)'],bpm:['BPM','BPM'],beatOffset:['拍の開始位置（s）','Beat offset (s)'],x:['左位置','Left'],y:['上位置','Top'],cx:['中心 X','Center X'],cy:['中心 Y','Center Y'],w:['幅','Width'],h:['高さ','Height'],angle:['Rotation（度）','Angle (degrees)'],lockAspect:['縦横比を固定','Lock aspect ratio'],
     untilNext:['次cutsPlayまで','Until the next cut'],endTime:['終了位置（s）','End position (s)'],technique:['手法','Technique'],entrance:['Entrance','Entrance'],departure:['Exit','Exit'],itemId:['素材','Asset'],frontmost:['Show above foreground','Frontmost'],blend:['合成方法','Blend mode'],opacity:['不透明度（％）','Opacity (%)'],videoLoop:['Loop video','Loop video'],videoStart:['素材のPlay開始位置（s）','Source start time (s)'],videoDuration:['Video duration (s)','Video duration (s)'],chromaKey:['Chroma key','Chroma key'],chromaColor:['Chroma key色','Key color'],
+    animationLoop:['アニメーションのPlay','Animation playback'],animationStart:['アニメーションの開始位置（s）','Animation start time (s)'],
     font:['フォント','Font'],size:['サイズ','Size'],scale:['倍率','Scale'],rotation:['回転','Rotation'],color:['色','Color'],alpha:['不透明度','Opacity'],seed:['乱数シード','Random seed'],n:['個数','Count'],id:[' types類','Type'],sx:['横方向倍率','Horizontal scale'],sy:['縦方向倍率','Vertical scale'],
   };
   const label = key => ({enterP:L('Entranceの詳細','Entrance parameters'),holdP:L('Holdの詳細','Hold parameters'),exitP:L('Exitの詳細','Exit parameters'),techniqueP:L('手法の詳細','Technique parameters'),entranceP:L('Entranceの詳細','Entrance parameters'),departureP:L('Exitの詳細','Exit parameters')}[key]) || (names[key] ? L(...names[key]) : J.detailFieldLabel(key));
@@ -43161,7 +43294,7 @@ function openCutDetails(layer,index,part=0) {
     const def=root==='decor'?J.DECOR[current.decor?.[+index]?.id]:g?(lyric?J.registry(g)[current[g]]:J.MEDIA_TECH[current[g]]):null;
     const names=def?.customDefinition?.labels?.[field];return names?L(names.ja||field,names.en||names.ja||field):null;
   }
-  const nativeKeys = lyric ? ['frontmost','blend','opacity'] : ['itemId','technique','entrance','departure','blend','opacity','placement','videoLoop','videoStart','videoDuration','chromaKey','chromaColor'];
+  const nativeKeys = lyric ? ['frontmost','blend','opacity'] : ['itemId','technique','entrance','departure','blend','opacity','placement','videoLoop','videoStart','videoDuration','animationLoop','animationStart','chromaKey','chromaColor'];
   function preview() {
     rememberDetail();
     clearTimeout(previewTimer);
@@ -43200,6 +43333,7 @@ function openCutDetails(layer,index,part=0) {
     schedulePreview();
   }
   function options(field) {
+    if(field==='animationLoop') return [['auto',L('ファイルの設定通り','As specified by the file')],['once',L('1回Play','Play once')],['loop',L('繰り返しPlay','Loop')]];
     if(field==='blend') return ['normal','multiply','screen','overlay'].map((v,i)=>[v,[L('通常','Normal'),L('乗算','Multiply'),L('スクリーン','Screen'),L('オーバーレイ','Overlay')][i]]);
     if(field==='itemId') return [['',L('No image','No image')],...J.mediaCopyItems(layer).map(a=>[a.id,a.name]),...S.project[layer].items.map(a=>[a.id,a.name])];
     if(field==='scheme') return S.plan.style.schemes.map((_,i)=>[String(i),String(i+1)]);
@@ -43495,6 +43629,7 @@ function openCutDetails(layer,index,part=0) {
     }
     for(const field of nativeKeys) {
       if(['videoLoop','videoStart','videoDuration','chromaKey','chromaColor'].includes(field)&&current.type!=='video')continue;
+      if(['animationLoop','animationStart'].includes(field)&&!current.animation)continue;
       let value=draft[field]??current[field];
       if(['technique','entrance','departure'].includes(field)&&Object.hasOwn(draft,field))value=draft[field]??'';
       if(field==='placement')value ||= {cx:.5,cy:.5,w:1,h:1,angle:0,lockAspect:true};
@@ -43524,7 +43659,7 @@ function openCutDetails(layer,index,part=0) {
       fieldEditor(grid,field,clone(value),v=>write(field,field==='scheme'?+v:v,false));
     }
     const categories=[
-      ['basic',L('基本','Basic'),['start','untilNext','endTime','lock','text','note','itemId','frontmost','blend','opacity','videoLoop','videoStart','videoDuration','chromaKey','chromaColor']],
+      ['basic',L('基本','Basic'),['start','untilNext','endTime','lock','text','note','itemId','frontmost','blend','opacity','videoLoop','videoStart','videoDuration','animationLoop','animationStart','chromaKey','chromaColor']],
       ['style',L('Style','Style'),['layout','params','scheme','fonts','palette','fontParams','effectStyle']],
       ['motion',L('モーション','Motion'),['techniqueP','entranceP','departureP','enterP','holdP','exitP','technique','entrance','departure','enter','hold','exit','inDur','outDur','stagger','motionScale','cam','camP','independentPhases']],
       ['effects',L('Treatment · Effects','Effects'),['treat','treatP','bg','bgP','trans','transP','transDur','effectSettings','effectFx','effectEvents']],
@@ -44679,6 +44814,7 @@ function splitMediaCut(layer,randomLeft=false,randomRight=false) {
     second.videoDuration=cut.end-time;
     first.videoLoop=second.videoLoop=cut.videoLoop;
   }
+  if(cut.animation){first.animationStart=cut.animationStart;second.animationStart=cut.animationStart+time-cut.start;first.animationLoop=second.animationLoop=cut.animationLoop;}
   cuts.forEach((c,i)=>{
     const next=i>index?i+1:i;
     overrides[next]=i===index?first:{...clone(m.cutOverrides[i] || {}),itemId:c.itemId};
@@ -44769,7 +44905,7 @@ function importProgressDialog(id, heading, delay=0) {
   };
 }
 async function addMediaFiles(files, layer) {
-  files=files.filter(file=>/^(image|video)\//.test(file.type));
+  files=files.filter(file=>/^(image|video)\//.test(file.type)||/\.(png|apng)$/i.test(file.name));
   if(!files.length)return;
   if(S.projectBusy || S.exporting){toast(J.mediaLabel('処理が完了してから素材をNewしてください','Wait for the current operation before adding assets'));return;}
   S.projectBusy=true;
@@ -44779,7 +44915,7 @@ async function addMediaFiles(files, layer) {
   for (const [index,file] of files.entries()) {
     const report=(text,value=null)=>loading.report(text+` (${index+1}/${files.length})：${file.name}`,value);
     report(J.mediaLabel('読み込み中','Loading'));
-    const type = file.type.startsWith('image/') ? 'image' : file.type.startsWith('video/') ? 'video' : null;
+    const type = file.type.startsWith('image/') || /\.(png|apng)$/i.test(file.name) ? 'image' : J.isVideoFile(file) ? 'video' : null;
     if (!type) continue;
     const existing = m.items.find(x => x.name === file.name && x.size === file.size && !J.mediaAssets.has(x.id));
     const item = existing || { id: crypto.randomUUID(), name: file.name, size: file.size, type };
@@ -44853,6 +44989,10 @@ function renderMediaLines() {
     li.querySelector('.time').addEventListener('change', e => { m.timing.lineTimes[i] = Math.max(0, parseFloat(e.target.value) || 0); replan(); });
     li.querySelector('.media-cut-file').addEventListener('change', e => setMediaCutAsset(layer,i,e.target.value || null));
     li.querySelector('.media-technique').addEventListener('change', e => { if (e.target.value !== 'legacy') { mediaOv(i, { technique: e.target.value || null, lock: false, lockedTechnique: undefined }, layer); replan(); } });
+    if(cut.animation){
+      li.querySelector('.meta').insertAdjacentHTML('beforeend',`<label class="media-video-loop">${J.mediaLabel('アニメーションのPlay','Animation playback')}<select class="media-animation-loop">${[['auto',J.mediaLabel('ファイルの設定通り','As specified by the file')],['once',J.mediaLabel('1回Play','Play once')],['loop',J.mediaLabel('繰り返しPlay','Loop')]].map(([value,label])=>`<option value="${value}" ${cut.animationLoop===value?'selected':''}>${label}</option>`).join('')}</select></label>`);
+      li.querySelector('.media-animation-loop').onchange=e=>{mediaOv(i,{animationLoop:e.target.value},layer);replan();};
+    }
     const videoLoop = li.querySelector('.media-video-loop input');
     if (videoLoop) videoLoop.addEventListener('change', e => { mediaOv(i, { videoLoop: e.target.checked }); replan(); });
     const videoStart = li.querySelector('.media-video-start');
@@ -46178,15 +46318,15 @@ function bind() {
   screenshot.addEventListener('click',async()=>{
     screenshot.disabled=true;
     try{
-      const filename=J.exportFilename(`${baseName()}_preview_${S.t.toFixed(3).replace('.','-')}`,'.png');
+      const time=S.t,filename=J.exportFilename(`${baseName()}_preview_${time.toFixed(3).replace('.','-')}`,'.png');
       const [w,h]=J.outputSize(S.project),canvas=document.createElement('canvas');
       canvas.width=w;canvas.height=h;
       const previousRes=J.glyphs.maxRes;
       try{
         J.glyphs.maxRes=h>=1000?768:512;
-        // Render immediately from the current video frames and preview edits,
-        // without changing playback or enlarging the low-resolution preview.
-        drawPreviewFrame(canvas.getContext('2d'),{renderer:new J.Renderer()});
+        // Prepare the animation at the captured project time, then render at the output size.
+        await J.prepareAPNGFrames(S.plan,time);
+        drawPreviewFrame(canvas.getContext('2d'),{renderer:new J.Renderer(),time});
       }finally{J.glyphs.maxRes=previousRes;}
       const blob=await new Promise((resolve,reject)=>canvas.toBlob(blob=>blob?resolve(blob):reject(new Error(J.mediaLabel('PNGを作成できませんでした','Could not create PNG'))),'image/png'));
       await J.saveFile(filename,blob);
