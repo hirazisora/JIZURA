@@ -410,6 +410,8 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
 .terms-oss summary { cursor: pointer; }
 .terms-oss p { font-size: 12px !important; margin-top: 6px; }
 .terms-foot { display: flex; justify-content: flex-end; align-items: center; gap: 12px; border-top: 1px solid var(--line); padding-top: 12px; }
+#newProjectDlg .terms-foot { margin-top: 16px; flex-wrap: wrap; }
+#newProjectDlg .project-save-warning { color: var(--danger); font-weight: 700; }
 
 /* ---------- responsive ---------- */
 @media (max-width: 1180px) {
@@ -691,6 +693,11 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
 .detail-search-option { padding: 7px 9px; cursor: pointer; overflow-wrap: anywhere; }
 .detail-search-option:hover, .detail-search-option.active { background: #49412c; color: #ffd479; }
 .detail-search-group, .detail-search-empty { padding: 7px 9px; color: #aaa; font-size: 12px; }
+.detail-font-preview-modes { display: flex; flex-wrap: wrap; gap: 6px; flex-shrink: 0; }
+.detail-font-preview-modes button { flex: 1 1 auto; font-size: 12px; padding: 6px 8px; white-space: nowrap; }
+.detail-font-preview-modes button[aria-pressed=true] { color: var(--amber); border-color: var(--amber); }
+.detail-font-sample { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.6; }
+.detail-font-name { color: var(--muted); line-height: 1.4; }
 
 /* Mobile editor: retain every tool and scroll the workspace vertically. */
 body.preview-fullscreen-open { overflow: hidden; }
@@ -1041,10 +1048,6 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
         <input id="scrub" type="range" min="0" max="10000" value="0" aria-label="再生位置">
         <button id="btnLoop" class="ghost small" aria-pressed="true">ループ</button>
         <span class="undo-btns"><button id="btnUndo" class="ghost small" type="button" title="元に戻す（Ctrl+Z）" disabled>↶ 元に戻す</button><button id="btnRedo" class="ghost small" type="button" title="やり直す（Ctrl+Shift+Z）" disabled>↷ やり直す</button></span>
-        <span class="hist-btns">
-          <button id="btnPrev" class="ghost small icon-txt" title="前の案に戻る" aria-label="前の案">◀</button>
-          <button id="btnNext" class="ghost small icon-txt" title="次の案へ進む" aria-label="次の案">▶</button>
-        </span>
         <button id="btnShuffle" class="accent" title="設定はそのままで構成だけ再抽選（ロックした行は維持）">シャッフル</button>
         <button id="btnOmakase" class="primary" title="スタイル・雰囲気・演出・配色をまるごとランダムに（キー R）">おまかせ</button>
       </div>
@@ -1071,17 +1074,10 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
       <button id="modeEasy" aria-pressed="false" aria-expanded="false" aria-controls="settingsDrawer" title="おまかせボタン中心のシンプルな画面">かんたん</button>
       <button id="modePro" aria-pressed="false" aria-expanded="false" aria-controls="settingsDrawer" title="すべての設定を表示">詳細</button>
     </div>
-    <section id="settingsDrawer" class="col col-right" aria-label="スタイルと書き出し" hidden>
+    <section id="settingsDrawer" class="col col-right" aria-label="スタイルと動画設定" hidden>
       <div class="settings-drawer-heading"><strong id="settingsDrawerTitle"></strong><button id="closeSettingsDrawer" type="button">×</button></div>
       <div id="easyPanel" class="easy" hidden>
         <div class="easy-hero">
-          <button id="btnOmakaseBig" class="omakase">おまかせで作る</button>
-          <p class="hint">押すたびに、スタイル・雰囲気・動き・配色・構成がまるごと変わります。キーボードの <span class="kbd">R</span> でも実行できます。</p>
-          <div class="hist-row">
-            <button id="btnPrev2" class="ghost">◀ 前の案</button>
-            <span id="histPos" class="muted mono"></span>
-            <button id="btnNext2" class="ghost">次の案 ▶</button>
-          </div>
           <div class="pick-sets">
             <label class="check"><input id="eLyricAvoidCenter" class="avoid-center-toggle" type="checkbox"><span>歌詞が画面中央を避ける<small>歌詞を自動配置するとき、画面の中央を空けます。*強調*した歌詞は中央にも置きます。</small></span></label>
           </div>
@@ -1100,7 +1096,7 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
           </div>
         </div>
         <div class="easy-sec">
-          <h3>書き出し</h3>
+          <h3>動画設定</h3>
           <div class="fields">
             <label class="field">画面比<select id="eAspect"><option value="16:9">16:9</option><option value="9:16">9:16 縦</option><option value="4:3">4:3</option><option value="3:4">3:4 縦</option><option value="1:1">1:1</option><option value="4:5">4:5 縦</option><option value="21:9">21:9</option></select></label>
             <label class="field">解像度<select id="eRes"><option value="720">720p</option><option value="1080">1080p</option><option value="1440">1440p</option><option value="2160">4K</option></select></label>
@@ -1109,21 +1105,14 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
             <label class="field">fps<select id="eFps"><option>24</option><option>30</option><option>60</option></select></label>
             <label class="field field-wide">背景<select id="eKey"><option value="off">通常（スタイルの背景）</option><option value="green">グリーンバック（合成用）</option><option value="black">ブラックバック（合成用）</option></select></label>
           </div>
-          <div class="outbtns"><button id="eMP4" class="primary">MP4 を書き出す</button></div>
-          <button class="terms-open linkish">書き出した動画の権利について</button>
-          <div class="exp-box" hidden>
-            <div class="progress"><i class="exp-bar"></i></div>
-            <div class="row" style="justify-content:space-between;margin-top:6px"><span class="exp-text muted mono">—</span><button class="exp-cancel ghost small">中止</button></div>
-          </div>
         </div>
       </div>
       <nav class="tabs" role="tablist">
         <button role="tab" data-tab="style" aria-selected="true">スタイル</button>
-        <button role="tab" data-tab="fx" aria-selected="false">演出</button>
-        <button role="tab" data-tab="tech" aria-selected="false">手法</button>
+        <button role="tab" data-tab="fx" aria-selected="false">歌詞</button>
         <button role="tab" data-tab="foregroundFx" aria-selected="false">前景</button>
         <button role="tab" data-tab="mediaFx" aria-selected="false">背景</button>
-        <button role="tab" data-tab="out" aria-selected="false">書き出し</button>
+        <button role="tab" data-tab="out" aria-selected="false">動画設定</button>
       </nav>
 
       <div class="tabpane" data-pane="style">
@@ -1161,9 +1150,7 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
           <label class="field">&nbsp;<button id="btnSeed" class="ghost">新しいシード</button></label>
         </div>
         <p class="note">同じシードなら同じ構成になります。行ごとの「再抽選」「ロック」は左の行リストから。</p>
-      </div>
-
-      <div class="tabpane" data-pane="tech" hidden>
+        <h3>手法</h3>
         <div class="pick-sets">
           <label class="check"><input id="lyricAutoPlacement" type="checkbox"><span>配置・サイズにも自動で変化をつける<small>オフでは全画面を使用。手動の表示エリアは維持します。「自動配置に戻す」で手動指定を解除できます。</small></span></label>
           <label class="check"><input id="lyricAvoidCenter" class="avoid-center-toggle" type="checkbox"><span>画面中央を避ける<small>自動配置で歌詞を画面の中央に置きません。*強調*したカットは対象外です。</small></span></label>
@@ -1201,19 +1188,7 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
           <label class="field field-wide">背景<select id="outKey"><option value="off">通常（スタイルの背景）</option><option value="green">グリーンバック（合成用）</option><option value="black">ブラックバック（合成用）</option></select></label>
         </div>
         <p class="note key-note">グリーンバック／ブラックバックにすると、白い文字と演出だけを単色の背景の上に描きます（背景の模様・紙の質感・粒子・周辺減光は入りません）。プレビューにもそのまま反映されます。グリーンバックは動画編集ソフトのクロマキーで、ブラックバックは「スクリーン」合成や輝度キーで抜いて、別の映像の上に重ねられます。</p>
-        <label class="row" style="gap:6px;margin-top:10px"><input id="outAudio" type="checkbox" checked> 曲を動画に含める</label>
-        <div class="outbtns">
-          <button id="btnMP4" class="primary">MP4 を書き出す</button>
-          <button id="btnShort" class="primary" hidden>ショート用MP4を書き出す</button>
-          <button id="btnPNG">連番PNG（ZIP）</button>
-          <button id="btnPNGA">透過PNG（ZIP・背景なし）</button>
-        </div>
-        <div class="exp-box" hidden style="margin-top:12px">
-          <div class="progress"><i class="exp-bar"></i></div>
-          <div class="row" style="justify-content:space-between;margin-top:6px"><span class="exp-text muted mono">—</span><button class="exp-cancel ghost small">中止</button></div>
-        </div>
-        <button class="terms-open linkish" style="margin-top:10px">書き出した動画・画像の権利とライセンスについて</button>
-        <p class="note" id="codecNote">書き出しはこのブラウザの中で行われます（Chrome / Edge 推奨）。</p></div></div>
+        </div></div>
       </div>
     </section>
   </main>
@@ -1250,9 +1225,9 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 <dialog id="newProjectDlg" class="terms" aria-labelledby="newProjectTitle">
  <form method="dialog">
   <h2 id="newProjectTitle">新規プロジェクト</h2>
-  <p>現在の編集内容を残す場合は、先に保存してください。</p>
+  <p class="project-save-warning">現在の内容を残す場合は、先に保存してください！</p>
   <label class="field">画面比<select id="newProjectAspect"><option>16:9</option><option>9:16</option><option>4:3</option><option>3:4</option><option>1:1</option><option>4:5</option><option>21:9</option></select></label>
-  <div class="acts"><button value="cancel">キャンセル</button><button id="btnCreateProject" type="button">作成</button></div>
+  <div class="terms-foot"><button value="cancel">キャンセル</button><button id="btnCreateProject" type="button">作成</button></div>
  </form>
 </dialog>
 
@@ -1299,7 +1274,20 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
    <p id="shortExportError" class="short-export-error" role="status"></p>
   </div>
  </section>
- <div id="exportDialogContent"></div>
+  <div id="exportDialogContent"></div>
+  <label class="row" style="gap:6px;margin-top:10px"><input id="outAudio" type="checkbox" checked> 曲を動画に含める</label>
+  <div class="outbtns">
+    <button id="btnMP4" class="primary">MP4 を書き出す</button>
+    <button id="btnShort" class="primary" hidden>ショート用MP4を書き出す</button>
+    <button id="btnPNG">連番PNG（ZIP）</button>
+    <button id="btnPNGA">透過PNG（ZIP・背景なし）</button>
+  </div>
+  <div class="exp-box" hidden style="margin-top:12px">
+    <div class="progress"><i class="exp-bar"></i></div>
+    <div class="row" style="justify-content:space-between;margin-top:6px"><span class="exp-text muted mono">—</span><button class="exp-cancel ghost small">中止</button></div>
+  </div>
+  <button class="terms-open linkish" style="margin-top:10px">書き出した動画・画像の権利とライセンスについて</button>
+  <p class="note" id="codecNote">書き出しはこのブラウザの中で行われます（Chrome / Edge 推奨）。</p>
  <div class="terms-foot"><button id="btnCloseExport" type="button">閉じる</button></div>
 </dialog>
 <dialog id="filenameDlg" class="terms" aria-labelledby="filenameDlgTitle">
@@ -42998,7 +42986,11 @@ function openCutDetails(layer,index,part=0) {
       }else ((project.detailRandomExclusions ||= {})[pool.group] ||= {})[value]=true;
     }
   }
-  let detailSearchPopup=null;
+  let detailSearchPopup=null,detailFontPreviewMode='name';
+  const detailFontName=key=>{
+    const font=J.FONTS[key];if(!font)return key;
+    return font.composite?font.label:(J.faceOf?.(key).label||font.label||key);
+  };
   function closeDetailSearch(){detailSearchPopup?.remove();detailSearchPopup=null;}
   function attachDetailSearch(select){
     if(select.dataset.searchAttached)return;select.dataset.searchAttached='true';
@@ -43006,11 +42998,32 @@ function openCutDetails(layer,index,part=0) {
       if(select.disabled)return;
       closeDetailSearch();
       const popup=document.createElement('div');popup.className='detail-search-popup';popup.setAttribute('popover','auto');
+      const fontMenu=select.dataset.detailFont==='true';
+      const lyricText=fontMenu?String(refreshPreview().text??'').replace(/\s+/gu,' ').trim():'';
+      const chars=Array.from(lyricText),lyricSample=chars.slice(0,120).join('')+(chars.length>120?'…':'')||L('（歌詞なし）','(No lyrics)');
       const search=document.createElement('input');search.type='search';search.placeholder=L('あいまい検索','Fuzzy search');search.setAttribute('aria-label',search.placeholder);search.autocomplete='off';search.value=initial;
       const list=document.createElement('div');list.className='detail-search-options';list.setAttribute('role','listbox');
       list.setAttribute('aria-label',select.closest('label')?.querySelector('span')?.textContent||search.placeholder);
-      popup.append(search,list);dialog.append(popup);detailSearchPopup=popup;
+      popup.append(search);
+      const modes=[];
+      if(fontMenu){
+        const controls=document.createElement('div');controls.className='detail-font-preview-modes';controls.setAttribute('role','group');controls.setAttribute('aria-label',L('フォントの表示','Font preview'));
+        for(const [mode,ja,en] of [['name','フォント名を表示','Show font names'],['lyrics','歌詞を表示','Show lyrics']]){
+          const button=document.createElement('button');button.type='button';button.dataset.fontPreviewMode=mode;button.textContent=L(ja,en);
+          button.addEventListener('click',()=>{detailFontPreviewMode=mode;filter();search.focus({preventScroll:true});});controls.append(button);modes.push(button);
+        }
+        popup.append(controls);
+      }
+      popup.append(list);dialog.append(popup);detailSearchPopup=popup;
       let items=[],active=-1;
+      const fontRequests=new Set();
+      const fontSample=(key,text,size)=>{
+        const span=document.createElement('span');span.className='detail-font-sample';span.style.font=J.fontCSS(key,size);
+        if(J.FONTS[key]?.composite){
+          for(const char of text){const glyph=document.createElement('span');glyph.style.font=J.fontCSS(key,size,char);glyph.textContent=char;span.append(glyph);}
+        }else span.textContent=text;
+        return span;
+      };
       const highlight=index=>{
         active=index;items.forEach((item,i)=>{item.classList.toggle('active',i===active);item.setAttribute('aria-selected',String(i===active));});
         if(items[active]){search.setAttribute('aria-activedescendant',items[active].id);items[active].scrollIntoView({block:'nearest'});}
@@ -43024,19 +43037,33 @@ function openCutDetails(layer,index,part=0) {
       };
       const filter=()=>{
         list.replaceChildren();items=[];const matches=J.detailSearchQuery(search.value);let group=null;
+        const fontKeys=new Set(),fontTexts=[];
+        for(const button of modes)button.setAttribute('aria-pressed',String(button.dataset.fontPreviewMode===detailFontPreviewMode));
         for(const option of select.options){
           const parent=option.parentElement,groupName=parent.tagName==='OPTGROUP'?parent.label:'';
           if(option.disabled||parent.disabled||!matches(option.textContent+' '+option.value+' '+groupName))continue;
           if(groupName&&group!==groupName){const heading=document.createElement('div');heading.className='detail-search-group';heading.textContent=groupName;list.append(heading);}group=groupName;
           const item=document.createElement('div');item.setAttribute('role','option');item.id='cutDetailSearchOption'+items.length;item.textContent=option.textContent;
-          item.className='detail-search-option';item.dataset.value=option.value;item.onclick=()=>choose(option);list.append(item);items.push(item);
+          if(fontMenu&&J.FONTS[option.value]){
+            const key=option.value,name=option.textContent,sample=detailFontPreviewMode==='lyrics'?lyricSample:name;
+            item.classList.add('detail-font-option');item.replaceChildren(fontSample(key,sample,16));item.setAttribute('aria-label',name);item.title=name+(detailFontPreviewMode==='lyrics'?'\n'+sample:'');
+            if(detailFontPreviewMode==='lyrics'){const caption=fontSample(key,name,11);caption.classList.add('detail-font-name');item.append(caption);}
+            fontKeys.add(key);fontTexts.push(sample,name);
+            if(J.FONTS[key].composite)for(const char of sample+name)fontKeys.add(J.fontForChar(key,char));
+          }
+          item.classList.add('detail-search-option');item.dataset.value=option.value;item.onclick=()=>choose(option);list.append(item);items.push(item);
         }
         if(!items.length){const empty=document.createElement('div');empty.className='detail-search-empty';empty.textContent=L('該当する項目がありません','No matching options');empty.setAttribute('role','status');list.append(empty);}
         highlight(Math.max(0,items.findIndex(item=>item.dataset.value===select.value)));
+        if(fontKeys.size){
+          const keys=[...fontKeys],text=fontTexts.join(''),request=JSON.stringify([keys,text]);
+          if(!fontRequests.has(request)){fontRequests.add(request);J.ensureFonts(text,keys).catch(()=>{});}
+        }
       };
       search.addEventListener('input',filter);
       search.addEventListener('keydown',e=>{
         if(e.isComposing)return;
+        if(e.key==='Tab'&&fontMenu)return;
         if(['ArrowDown','ArrowUp','Enter','Escape','Tab'].includes(e.key)){
           if(e.key!=='Tab')e.preventDefault();e.stopPropagation();
           if(e.key==='Escape'||e.key==='Tab'){closeDetailSearch();select.focus();}
@@ -43045,6 +43072,12 @@ function openCutDetails(layer,index,part=0) {
         }
       });
       popup.addEventListener('click',e=>e.stopPropagation());
+      if(fontMenu){
+        popup.addEventListener('keydown',e=>{
+          if(e.key==='Escape'){e.preventDefault();e.stopPropagation();closeDetailSearch();select.focus();}
+          else if(e.key==='Tab')setTimeout(()=>{if(popup.isConnected&&!popup.contains(document.activeElement))closeDetailSearch();},0);
+        });
+      }
       popup.addEventListener('toggle',e=>{if(e.newState==='closed'){popup.remove();if(detailSearchPopup===popup)detailSearchPopup=null;}});
       const rect=select.getBoundingClientRect(),width=Math.min(Math.max(rect.width,240),innerWidth-16);
       popup.style.width=width+'px';popup.style.left=Math.max(8,Math.min(rect.left,innerWidth-width-8))+'px';
@@ -43150,10 +43183,13 @@ function openCutDetails(layer,index,part=0) {
     if(decorMode)value=value==='count'?'count':'index';
     const modeChoices=decorMode?(decorId==='indexNum'?[["index",L('少なく回転','Fewer digit rolls')],["count",L('多く回転','More digit rolls')]]:[["index",L('カットの通し番号','Cut number')],["count",L('開始値から終了値へ変化','Animate from start to end')]]):null;
     const choices=modeChoices || (/^fonts\.[^.]+\.\d+$/.test(path)||(path.startsWith('params.')&&typeof value==='string'&&J.FONTS[value])?Object.entries(J.FONTS).map(([id,d])=>[id,d.name||id]):/^effectEvents\.\d+\.type$/.test(path)?Object.entries(J.FXE).map(([id,d])=>[id,d.name||id]):field==='id'&&!path.startsWith('decor.')?null:options(field)); const input=document.createElement(choices?'select':field==='text'?'textarea':'input');input.dataset.detailField=path;
+    const fontChoice=choices&&(field==='font'||/^fonts\.[^.]+\.\d+$/.test(path)||(path.startsWith('params.')&&typeof value==='string'&&J.FONTS[value]));
+    if(fontChoice)input.dataset.detailFont='true';
     if(choices) { for(const [v,n] of choices) input.add(new Option(n,v));if(value!=null&&!choices.some(([v])=>String(v)===String(value))) input.add(new Option(String(value),String(value)));input.value=value??''; }
     else if(typeof value==='boolean'){input.type='checkbox';input.checked=value;}
     else if(typeof value==='number'){input.type='number';input.step='any';input.value=+(value*factor).toFixed(6); if(['w','h','n','inDur','outDur','transDur','duration','stagger','motionScale','contentScale','videoStart','videoDuration','opacity'].includes(field)) input.min=field==='videoDuration'?.04:0; if(field==='opacity')input.max=100;}
     else {if(field!=='text')input.type=/^#[0-9a-f]{6}$/i.test(value||'')?'color':'text';input.value=value??'';}
+    if(fontChoice){for(const option of input.options)if(J.FONTS[option.value])option.textContent=detailFontName(option.value);}
     if(lyric && field==='frontmost' && cut.emphasis){input.disabled=true;input.title=emphasisFrontmostHint();}
     if(typeof value==='number' && ['inDur','outDur','transDur'].includes(path))input.max=Math.max(0,current.end-current.start)*.45;
     input.addEventListener('change',()=>{
@@ -44754,25 +44790,6 @@ function commit() {              // call after changing the look
   const s = lookSnap();
   if (H.list[H.i] !== s) { H.list = H.list.slice(0, H.i + 1); H.list.push(s); H.i = H.list.length - 1; }
   if (H.list.length > 80) { H.list.splice(0, H.list.length - 80); H.i = H.list.length - 1; }
-  updateHist();
-}
-function histGo(d) {
-  if (S.exporting) return;
-  remember();                    // hand edits made since the last step become a stop of their own
-  const j = H.i + d; if (j < 0 || j >= H.list.length) return;
-  H.i = j;
-  const { mediaEffects, ...look } = JSON.parse(H.list[j]);
-  Object.assign(S.project, look);
-  for (const layer of ['foreground', 'media']) S.project[layer].effects = mediaEffects[layer];
-  fontKey = ''; syncUI(); replan(); updateHist();
-  toast(`${j + 1} / ${H.list.length} 案目`);
-  restartPreview();
-}
-function updateHist() {
-  const canB = H.i > 0, canF = H.i < H.list.length - 1;
-  ['btnPrev', 'btnPrev2'].forEach(id => { $(id).disabled = !canB; });
-  ['btnNext', 'btnNext2'].forEach(id => { $(id).disabled = !canF; });
-  $('histPos').textContent = H.list.length > 1 ? `${H.i + 1} / ${H.list.length}` : '';
 }
 
 /* ---------------- おまかせ ---------------- */
@@ -44940,7 +44957,7 @@ function renderFx() {
   $('seed').value = S.project.seed;
 }
 
-/* ---------------- technique tab ---------------- */
+/* ---------------- techniques in the lyrics tab ---------------- */
 const GROUPS = [['layout', 'レイアウト'], ['enter', '登場'], ['hold', '保持'], ['exit', '退場'], ['decor', '装飾'], ['treat', '文字の加工'], ['bg', '背景'], ['cam', 'カメラ'], ['fx', '画面効果'], ['trans', 'カット間のつなぎ']];
 const openGroups = new Set();
 function techItems(g) { return J.order(g).filter(k => J.registry(g)[k] && !J.registry(g)[k].special); }
@@ -44948,7 +44965,7 @@ function renderTech() {
   const lyricEffects = J.lyricEffectSettings(S.project);
   $('lyricAutoPlacement').checked = lyricEffects.autoPlacement;
   $('lyricAvoidForeground').checked = lyricEffects.avoidForeground;
-  // 「画面中央を避ける」 (詳細 > 手法) and 「歌詞が画面中央を避ける」 (かんたん) are the same setting.
+  // 「画面中央を避ける」 (詳細 > 歌詞) and 「歌詞が画面中央を避ける」 (かんたん) are the same setting.
   for (const input of document.querySelectorAll('.avoid-center-toggle')) input.checked = lyricEffects.avoidCenter && lyricEffects.autoPlacement;
   $('lyricAvoidCenter').disabled = !lyricEffects.autoPlacement;
   $('lyricGroupAvoidanceStrength').value = lyricEffects.lyricAvoidanceStrength;
@@ -45139,7 +45156,7 @@ function syncExportSettingsVisibility() {
   for(const id of ['outAspect','outRes','outVideoSize'])$(id).closest('label').hidden=short;
   for(const id of ['outVideoWidth','outVideoHeight'])$(id).closest('label').hidden=short||$('outVideoSize').value!=='custom';
   $('outQuality').closest('label').hidden=!mp4;
-  $('outAudio').closest('label').hidden=!mp4;
+  $('outAudio').closest('label').hidden=!inDialog||!mp4;
   $('outBitrate').closest('label').hidden=!mp4||S.project.quality!=='custom';
   $('outQP').closest('label').hidden=$('outQPNote').hidden=!mp4||S.project.quality!=='qp';
   $('outKey').closest('label').hidden=transparent||short;
@@ -45185,16 +45202,15 @@ let codecNoteVersion=0;
 async function codecNote() {
   const version=++codecNoteVersion,isQP=S.project.quality==='qp';
   const project=activeExportProject(),[w, h] = J.outputSize(project);
-  let bitrate;try{if(isQP)J.videoQuantizer(project);else bitrate=J.videoBitrate(project);}catch(err){$('codecNote').textContent=err.message;$('btnMP4').disabled=true;$('btnShort').disabled=true;$('eMP4').disabled=true;return;}
+  let bitrate;try{if(isQP)J.videoQuantizer(project);else bitrate=J.videoBitrate(project);}catch(err){$('codecNote').textContent=err.message;$('btnMP4').disabled=true;$('btnShort').disabled=true;return;}
   const vc = await J.pickVideoCodec(w, h, S.project.fps, bitrate,{bitrateMode:isQP?'quantizer':'variable'});
   if(version!==codecNoteVersion||S.exporting)return;
   $('codecNote').textContent = vc ? `このブラウザでは ${vc.label} で書き出します（${w}×${h} / ${S.project.fps}fps）。書き出し中はタブを開いたままにしてください。` : 'このブラウザは動画エンコード（WebCodecs）に対応していません。Chrome / Edge の最新版で開くか、連番PNGを使ってください。';
-  $('btnMP4').disabled = !vc; $('eMP4').disabled = !vc;
+  $('btnMP4').disabled = !vc;
   $('btnShort').disabled=!vc||shortExportActive()&&!shortRangeValid();
   if(!vc&&isQP)$('codecNote').textContent=J.mediaLabel('このブラウザは画質優先（QP指定）に対応していません。別の画質設定または連番PNGを使用してください。','This browser does not support QP encoding. Choose another quality setting or a PNG sequence.');
-  if (!vc) $('eMP4').title = 'このブラウザは MP4 書き出しに対応していません（Chrome / Edge 推奨）';
 }
-const EXP_BTNS = ['btnMP4', 'btnShort', 'btnPNG', 'btnPNGA', 'eMP4'];
+const EXP_BTNS = ['btnMP4', 'btnShort', 'btnPNG', 'btnPNGA'];
 function openExportDialog(kind) {
   if (S.exporting) return;
   pause();
@@ -45265,7 +45281,7 @@ async function runExport(kind) {
   pause();
   if(kind==='short')stopShortPreview();
   const ac = new AbortController(); S.exporting = ac;
-  const settingsInputs = [...$('exportSettings').querySelectorAll('input,select'),...$('shortExportOptions').querySelectorAll('input,select,button'),$('exportFilename')].map(el=>[el,el.disabled]);
+  const settingsInputs = [...$('exportSettings').querySelectorAll('input,select'),...$('shortExportOptions').querySelectorAll('input,select,button'),$('outAudio'),$('exportFilename')].map(el=>[el,el.disabled]);
   settingsInputs.forEach(([el])=>{el.disabled=true;}); $('btnCloseExport').disabled = true;
   const boxes = [...document.querySelectorAll('.exp-box')];
   const setText = m => boxes.forEach(b => { b.querySelector('.exp-text').textContent = m; });
@@ -46203,7 +46219,6 @@ function bind() {
   $('btnPNG').addEventListener('click', () => runExport('png'));
   $('btnPNGA').addEventListener('click', () => runExport('pnga'));
   document.querySelectorAll('.exp-cancel').forEach(b => b.addEventListener('click', () => { if (S.exporting) S.exporting.abort(); }));
-  $('eMP4').addEventListener('click', () => runExport('mp4'));
   // かんたんモード
   $('modeEasy').addEventListener('click', () => toggleSettingsDrawer('easy'));
   $('modePro').addEventListener('click', () => toggleSettingsDrawer('pro'));
@@ -46214,9 +46229,6 @@ function bind() {
   window.addEventListener('resize',positionSettingsDrawer);
   if(window.ResizeObserver)new ResizeObserver(positionSettingsDrawer).observe(document.querySelector('.bar'));
   $('btnOmakase').addEventListener('click', omakase);
-  $('btnOmakaseBig').addEventListener('click', omakase);
-  ['btnPrev', 'btnPrev2'].forEach(id => $(id).addEventListener('click', () => histGo(-1)));
-  ['btnNext', 'btnNext2'].forEach(id => $(id).addEventListener('click', () => histGo(1)));
   $('eStyle').addEventListener('click', () => rerollPart('style'));
   $('eMood').addEventListener('click', () => rerollPart('mood'));
   $('eCut').addEventListener('click', () => rerollPart('cut'));

@@ -41,7 +41,7 @@ for(let i=0;i<16000;i++)wav.writeInt16LE(Math.round(Math.sin(i/16000*440*2*Math.
   await q.locator('#projectMenu summary').click();await q.locator('#btnNew').click();await q.locator('#newProjectAspect').selectOption('1:1');await q.screenshot({path:'../new-project-'+(lang?'en':'ja')+'.png'});await q.locator('#btnCreateProject').click();
   assert.equal(await q.evaluate(()=>document.getElementById('themesDlg').open),true);await q.keyboard.press('Escape');
   assert.deepEqual(await q.evaluate(()=>[J.ui.project.title,J.ui.project.lyrics,J.ui.project.aspect,J.ui.project.timing.bpm,J.ui.audio,J.ui.project.audioAsset||null,J.mediaAssets.size,J.ui.plan.cuts.length,J.ui.project.media.items.length,J.ui.project.foreground.items.length]),['','','1:1',0,null,null,0,0,0,0]);
-  assert.equal(await q.locator('#btnUndo').isDisabled(),true);assert.equal(await q.locator('#btnPrev').isDisabled(),true);
+  assert.equal(await q.locator('#btnUndo').isDisabled(),true);assert.equal(await q.locator('#btnPrev').count(),0);
   // Old settings-only JSON remains readable and carries no old song into it.
   const legacy={...before,title:'Legacy',media:{items:[]},foreground:{items:[]}};delete legacy.audioAsset;
   await q.locator('#fileProject').setInputFiles({name:'old.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(legacy))});await q.waitForFunction(()=>J.ui.project.title==='Legacy'&&!J.ui.projectBusy);assert.equal(await q.evaluate(()=>J.ui.audio),null);

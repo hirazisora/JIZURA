@@ -166,11 +166,7 @@ const assert = require('node:assert/strict');
       await page.locator('#btnRedo').click();
       for(const layer of ['foreground','media'])assert.deepEqual((await snapshot(layer)).project.effects,afterRandom[layer].project.effects,'redo restores randomized candidates');
       await page.evaluate(()=>{J.ui.project.foreground.timing.lineTimes[0]=.25;J.uiApi.replan();});
-      await page.locator('#btnPrev').click();
-      for(const layer of ['foreground','media'])assert.deepEqual((await snapshot(layer)).project.effects,beforeRandom[layer].project.effects,'previous variation restores media candidates');
-      assert.equal((await snapshot('foreground')).project.timing.lineTimes[0],.25,'look history must preserve timing edits');
-      await page.locator('#btnNext').click();
-      for(const layer of ['foreground','media'])assert.deepEqual((await snapshot(layer)).project.effects,afterRandom[layer].project.effects,'next variation restores media candidates');
+      assert.equal(await page.locator('#btnPrev, #btnNext').count(),0);
       assert.equal((await snapshot('foreground')).project.timing.lineTimes[0],.25);
       const saved = {foreground:await snapshot('foreground'),media:await snapshot('media')};
       const downloadReady = page.waitForEvent('download');
@@ -189,7 +185,7 @@ const assert = require('node:assert/strict');
       await page.locator('[data-tab="foregroundFx"]').click();
       await page.screenshot({path:`../media-layer-settings-${locale ? 'en' : 'ja'}.png`,fullPage:true});
       assert.deepEqual(errors, []);
-      console.log(locale || 'ja', 'folding, category actions, independent random subsets, locked/manual cuts, shuffle, undo/history and save/reload: OK');
+      console.log(locale || 'ja', 'folding, category actions, independent random subsets, locked/manual cuts, shuffle, undo/redo and save/reload: OK');
       await page.close();
     }
   } finally { await browser.close(); }
