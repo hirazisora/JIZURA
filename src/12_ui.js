@@ -2832,7 +2832,7 @@ function importProgressDialog(id, heading, delay=0) {
   };
 }
 async function addMediaFiles(files, layer) {
-  files=files.filter(file=>/^(image|video)\//.test(file.type)||/\.(png|apng)$/i.test(file.name));
+  files=files.filter(file=>/^(image|video)\//.test(file.type)||/\.(png|apng|gif)$/i.test(file.name));
   if(!files.length)return;
   if(S.projectBusy || S.exporting){toast(J.mediaLabel('処理が完了してから素材を追加してください','Wait for the current operation before adding assets'));return;}
   S.projectBusy=true;
@@ -2842,7 +2842,7 @@ async function addMediaFiles(files, layer) {
   for (const [index,file] of files.entries()) {
     const report=(text,value=null)=>loading.report(text+` (${index+1}/${files.length})：${file.name}`,value);
     report(J.mediaLabel('読み込み中','Loading'));
-    const type = file.type.startsWith('image/') || /\.(png|apng)$/i.test(file.name) ? 'image' : J.isVideoFile(file) ? 'video' : null;
+    const type = file.type.startsWith('image/') || /\.(png|apng|gif)$/i.test(file.name) ? 'image' : J.isVideoFile(file) ? 'video' : null;
     if (!type) continue;
     const existing = m.items.find(x => x.name === file.name && x.size === file.size && !J.mediaAssets.has(x.id));
     const item = existing || { id: crypto.randomUUID(), name: file.name, size: file.size, type };
