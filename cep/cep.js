@@ -138,24 +138,14 @@ function inject() {
     tim.after(row);
   }
   $('audioFile') && $('audioFile').addEventListener('change', () => { aeAudio = null; document.querySelectorAll('.ae-audio-row').forEach(el => { el.hidden = true; }); });
-  // easy mode export: AE first
-  const eMP4 = $('eMP4');
-  if (eMP4) {
-    eMP4.classList.remove('primary');
+  // Keep AE actions in the header Export menu alongside the browser exports.
+  const menu = $('outputMenu') && $('outputMenu').querySelector('.header-menu-items');
+  if (menu) {
     const box = document.createElement('div'); box.className = 'ae-box';
-    box.innerHTML = '<div class="outbtns"></div><label class="row ae-audio-row" hidden><input type="checkbox" class="ae-audio-in" checked><span>曲（<span class="ae-audio-name"></span>）をコンポに入れる</span></label><p class="note ae-status">—</p>';
-    box.querySelector('.outbtns').append(btn('eAEBuild', 'After Effects にコンポを作る', 'primary ae-build', buildInAE));
-    eMP4.closest('.outbtns').before(box);
-  }
-  // pro mode: an After Effects block at the top of the output tab
-  const pane = document.querySelector('[data-pane="out"]');
-  if (pane) {
-    const box = document.createElement('div'); box.className = 'ae-box';
-    box.innerHTML = '<h3>After Effects</h3><div class="outbtns"></div><label class="row ae-audio-row" hidden><input id="aeAudioIn" type="checkbox" class="ae-audio-in" checked><span>曲（<span class="ae-audio-name"></span>）をコンポに入れる</span></label><p class="note ae-status">—</p><h3>動画・画像</h3>';
-    box.querySelector('.outbtns').append(btn('aeBuild', 'AEでコンポを生成', 'primary ae-build', buildInAE), btn('aeDiag', '診断レポートを保存', 'small', diagnose));
+    box.innerHTML = '<div class="outbtns"></div><label class="row ae-audio-row" hidden><input id="aeAudioIn" type="checkbox" class="ae-audio-in" checked><span>曲（<span class="ae-audio-name"></span>）をコンポに入れる</span></label><p class="note ae-status">—</p>';
+    box.querySelector('.outbtns').append(btn('aeDiag', '診断レポートを保存', 'small', diagnose));
     box.querySelector('#aeDiag').title = '最後に作ったコンポを調べて JIZURA_report.txt を保存します（うまく作れないときに送ってください）';
-    pane.prepend(box);
-    const m = $('btnMP4'); m && m.classList.remove('primary');
+    menu.append(box);
   }
   // keep the two "include the song" checkboxes in step
   document.querySelectorAll('.ae-audio-in').forEach(cb => cb.addEventListener('change', () => { document.querySelectorAll('.ae-audio-in').forEach(o => { o.checked = cb.checked; }); }));

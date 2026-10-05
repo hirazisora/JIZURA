@@ -392,6 +392,8 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
 .terms-oss summary { cursor: pointer; }
 .terms-oss p { font-size: 12px !important; margin-top: 6px; }
 .terms-foot { display: flex; justify-content: flex-end; align-items: center; gap: 12px; border-top: 1px solid var(--line); padding-top: 12px; }
+#newProjectDlg .terms-foot { margin-top: 16px; flex-wrap: wrap; }
+#newProjectDlg .project-save-warning { color: var(--danger); font-weight: 700; }
 
 /* ---------- responsive ---------- */
 @media (max-width: 1180px) {
@@ -673,6 +675,11 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
 .detail-search-option { padding: 7px 9px; cursor: pointer; overflow-wrap: anywhere; }
 .detail-search-option:hover, .detail-search-option.active { background: #49412c; color: #ffd479; }
 .detail-search-group, .detail-search-empty { padding: 7px 9px; color: #aaa; font-size: 12px; }
+.detail-font-preview-modes { display: flex; flex-wrap: wrap; gap: 6px; flex-shrink: 0; }
+.detail-font-preview-modes button { flex: 1 1 auto; font-size: 12px; padding: 6px 8px; white-space: nowrap; }
+.detail-font-preview-modes button[aria-pressed=true] { color: var(--amber); border-color: var(--amber); }
+.detail-font-sample { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.6; }
+.detail-font-name { color: var(--muted); line-height: 1.4; }
 
 /* Mobile editor: retain every tool and scroll the workspace vertically. */
 body.preview-fullscreen-open { overflow: hidden; }
