@@ -25,6 +25,9 @@ const fs=require('node:fs'),path=require('node:path'),assert=require('node:asser
     await timelineAction(page,'[data-layer="lyrics"]','details');
     const detail=page.locator('#cutDetailsDialog');assert(await detail.isVisible());
     assert(await detail.evaluate(el=>el.scrollWidth<=el.clientWidth+1),'detail overflow');
+    assert.equal(await detail.locator('[role=tab][aria-selected=true]').getAttribute('data-detail-tab'),'basic');
+    await detail.locator('[data-detail-tab=motion]')[mobile?'tap':'click']();
+    assert.equal(await detail.locator('[role=tab][aria-selected=true]').getAttribute('data-detail-tab'),'motion');
     await page.locator('[data-detail-field=enter]')[mobile?'tap':'click']();await page.locator('.detail-search-popup input').fill('ぼかし');assert(await page.locator('.detail-search-option').count()>0);
     await page.locator('.detail-search-popup input').press('Escape');
     await detail.getByRole('button',{name:lang?'Cancel':'キャンセル',exact:true})[mobile?'tap':'click']();

@@ -83,20 +83,29 @@ const assert = require('node:assert/strict');
         // The foreground composes with the background's dynamic layouts, so its placement follows the background tab's automatic placement.
         assert.deepEqual(settingsOnly(await snapshot(other), layer), settingsOnly(untouched, layer), 'sliders and automatic placement must stay local to the tab');
 
+        const resolvedCuts = cuts => cuts.map(c => ({...c,effectSettings:Object.fromEntries(Object.entries(c.effectSettings).filter(([key])=>key!=='enabled'))}));
+        const resolvedBeforeDisable = resolvedCuts((await snapshot(layer)).cuts);
         await panel.locator('[data-media-action="disable"]').click();
+        assert.equal(await panel.locator('[data-media-tech]:checked').count(),0);
+        assert.deepEqual(resolvedCuts((await snapshot(layer)).cuts),resolvedBeforeDisable,'candidate edits preserve resolved cut effects until an explicit shuffle');
+        await panel.locator('[data-media-action="shuffle"]').click();
         assert.ok((await snapshot(layer)).cuts.every(c => c.technique === 'none'));
         const technique = layer === 'foreground' ? 'neonContour' : 'pushIn';
         await panel.locator('details').filter({has:page.locator(`[data-media-tech="${technique}"]`)}).locator('summary').click();
         await panel.locator(`[data-media-tech="${technique}"]`).check();
-        assert.ok((await snapshot(layer)).cuts.every(c => c.technique === technique));
+        assert.ok((await snapshot(layer)).cuts.every(c => c.technique === 'none'),'checking a candidate does not reroll existing cuts');
         await page.locator('#btnUndo').click();
         assert.ok((await snapshot(layer)).cuts.every(c => c.technique === 'none'));
         assert.equal(await panel.locator(`[data-media-tech="${technique}"]`).isChecked(), false);
         await page.locator('#btnRedo').click();
+        assert.equal(await panel.locator(`[data-media-tech="${technique}"]`).isChecked(),true);
+        assert.ok((await snapshot(layer)).cuts.every(c => c.technique === 'none'),'redo restores candidates without rerolling');
+        await panel.locator('[data-media-action="shuffle"]').click();
         assert.ok((await snapshot(layer)).cuts.every(c => c.technique === technique));
         await panel.locator('[data-media-action="enable"]').click();
         assert.equal(await panel.locator('[data-media-tech]:checked').count(), await page.evaluate(layer=>Object.keys(J.MEDIA_TECH).filter(key=>J.mediaTechAllowed(key,layer)).length,layer));
-        assert.deepEqual(await snapshot(other), untouched, 'enable/disable and undo must stay local to the tab');
+        assert.ok((await snapshot(layer)).cuts.every(c => c.technique === technique),'enabling candidates preserves resolved effects');
+        assert.deepEqual(settingsOnly(await snapshot(other), layer), settingsOnly(untouched, layer), 'candidate edits, undo and tab shuffle must stay local to the tab');
         await page.locator('#btnUndo').click();
 
         const beforeShuffle = await snapshot(layer);
@@ -147,7 +156,9 @@ const assert = require('node:assert/strict');
       const afterRandom={foreground:await snapshot('foreground'),media:await snapshot('media')};
       for(const layer of ['foreground','media']) {
         const before=beforeRandom[layer], after=afterRandom[layer], {effects,...rest}=after.project;
-        assert.deepEqual(rest,(( {effects,...rest})=>rest)(before.project),'omakase changes media candidate checks without changing material/cut settings');
+        // autoEffects is the generated cache refreshed by an explicit randomize; manual options must survive.
+        const manualSettings = project => {const {effects,...rest}=project;return {...rest,cutOverrides:Object.fromEntries(Object.entries(rest.cutOverrides).map(([index,{autoEffects,...manual}])=>[index,manual]))};};
+        assert.deepEqual(manualSettings(after.project),manualSettings(before.project),'omakase preserves material and explicit cut settings');
         assert.notDeepEqual(effects.enabled,before.project.effects.enabled);
         assert.deepEqual(after.cuts.slice(0,3).map(c=>c.technique),['iris','none','glitch'],'manual, no-effects and locked cuts stay fixed');
         assert.equal(after.cuts[3].itemId,null);
