@@ -361,12 +361,12 @@ J.releaseMediaAsset = asset => {
 J.attachMedia = async (item, file, assets = J.mediaAssets, onProgress = () => {}) => {
   file = await J.snapshotMediaFile(file,(loaded,total)=>onProgress({phase:'read',loaded,total}));
   onProgress({phase:'decode'});
-  if(item.type==='image' && (/image\/(?:png|apng)/i.test(file.type)||/\.(?:png|apng)$/i.test(item.name))){
-    const animation=await J.decodeAPNG(file,onProgress);
+  if(item.type==='image' && (/image\/(?:png|apng|gif)/i.test(file.type)||/\.(?:png|apng|gif)$/i.test(item.name))){
+    const animation=await J.decodeGIF(file,onProgress)||await J.decodeAPNG(file,onProgress);
     if(animation){
       const previous=assets.get(item.id);if(previous)J.releaseMediaAsset(previous);
       item.width=animation.element.width;item.height=animation.element.height;
-      item.animation={format:'apng',frames:animation.frames.length,duration:animation.duration,plays:animation.plays};
+      item.animation={format:animation.format,frames:animation.frames.length,duration:animation.duration,plays:animation.plays};
       const posterUrl=URL.createObjectURL(animation.defaultImage),posterElement=new Image();posterElement.src=posterUrl;
       assets.set(item.id,{element:animation.element,type:'image',animation,poster:posterUrl,posterUrl,posterElement,file});
       return animation.element;

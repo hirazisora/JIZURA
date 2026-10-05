@@ -1,4 +1,4 @@
-/* APNG frame timing and composition. Each frame is decoded as a static PNG,
+/* Animated-image frame timing and composition. Each frame is decoded as a static image,
    so preview, seeking and export use the project clock rather than an <img> clock. */
 (() => {
 'use strict';
@@ -43,7 +43,7 @@ J.parseAPNG=buffer=>{
   if(!control||frames.length!==control.frames||!defaultData.length)throw invalid();
   const png=(w,h,parts)=>{const ihdr=header.slice(),v=new DataView(ihdr.buffer);v.setUint32(0,w);v.setUint32(4,h);return new Blob([signature,chunk('IHDR',ihdr),...shared,...parts.map(p=>chunk('IDAT',p)),chunk('IEND',new Uint8Array())],{type:'image/png'});};
   for(const f of frames){f.png=png(f.width,f.height,f.data);delete f.data;}
-  return {width,height,plays:control.plays,frames,defaultImage:png(width,height,defaultData)};
+  return {format:'apng',width,height,plays:control.plays,frames,defaultImage:png(width,height,defaultData)};
 };
 const decodeImage=async blob=>{
   if(typeof createImageBitmap==='function')return createImageBitmap(blob);
@@ -51,25 +51,27 @@ const decodeImage=async blob=>{
   try{image.src=url;await image.decode();return image;}catch(error){image.removeAttribute('src');throw error;}finally{URL.revokeObjectURL(url);}
 };
 const closeImage=image=>{if(image?.close)image.close();else image?.removeAttribute?.('src');};
-const canvasBlob=canvas=>new Promise((resolve,reject)=>canvas.toBlob(blob=>blob?resolve(blob):reject(new Error('Could not prepare APNG frame')),'image/png'));
-J.decodeAPNG=async(file,onProgress=()=>{})=>{
-  const parsed=J.parseAPNG(await file.arrayBuffer());if(!parsed)return null;
+const canvasBlob=canvas=>new Promise((resolve,reject)=>canvas.toBlob(blob=>blob?resolve(blob):reject(new Error('Could not prepare animation frame')),'image/png'));
+J.composeImageAnimation=async(parsed,onProgress=()=>{})=>{
   const canvas=document.createElement('canvas');canvas.width=parsed.width;canvas.height=parsed.height;
   const ctx=canvas.getContext('2d'),element=document.createElement('canvas');element.width=canvas.width;element.height=canvas.height;
+  const fill=(frame,color)=>{ctx.clearRect(frame.x,frame.y,frame.width,frame.height);if(color?.[3]){ctx.fillStyle=`rgba(${color[0]},${color[1]},${color[2]},${color[3]/255})`;ctx.fillRect(frame.x,frame.y,frame.width,frame.height);}};
+  if(parsed.background)fill({x:0,y:0,width:canvas.width,height:canvas.height},parsed.background);
   const frames=[],ends=[];let duration=0;
   for(const [index,frame] of parsed.frames.entries()){
     const previous=frame.dispose===2&&index?ctx.getImageData(frame.x,frame.y,frame.width,frame.height):null;
-    const image=await decodeImage(frame.png);
+    const image=await decodeImage(frame.image||frame.png);
     try{if(frame.blend===0)ctx.clearRect(frame.x,frame.y,frame.width,frame.height);ctx.drawImage(image,frame.x,frame.y);}finally{closeImage(image);}
     if(index===0)element.getContext('2d').drawImage(canvas,0,0);
     frames.push(await canvasBlob(canvas));duration+=frame.delay;ends.push(duration);
-    if(frame.dispose===1||frame.dispose===2&&!index)ctx.clearRect(frame.x,frame.y,frame.width,frame.height);
+    if(frame.dispose===1||frame.dispose===2&&!index)fill(frame,frame.background);
     else if(previous)ctx.putImageData(previous,frame.x,frame.y);
     onProgress({phase:'decode',frame:index+1,total:parsed.frames.length});
   }
   canvas.width=canvas.height=1;
-  return {element,defaultImage:parsed.defaultImage,frames,ends,duration,plays:parsed.plays,cache:new Map(),pending:new Map(),pins:new Set(),limit:Math.max(2,Math.floor(32*1024*1024/(element.width*element.height*4))),released:false};
+  return {format:parsed.format,element,defaultImage:parsed.defaultImage||frames[0],frames,ends,duration,plays:parsed.plays,cache:new Map(),pending:new Map(),pins:new Set(),limit:Math.max(2,Math.floor(32*1024*1024/(element.width*element.height*4))),released:false};
 };
+J.decodeAPNG=async(file,onProgress=()=>{})=>{const parsed=J.parseAPNG(await file.arrayBuffer());return parsed?J.composeImageAnimation(parsed,onProgress):null;};
 J.apngFrameIndex=(animation,cut,t)=>{
   const elapsed=Math.max(0,+cut.animationStart||0)+Math.max(0,t-cut.start),plays=cut.animationLoop==='loop'?0:cut.animationLoop==='once'?1:animation.plays;
   if(plays&&elapsed>=animation.duration*plays-1e-9)return animation.frames.length-1;
@@ -79,10 +81,10 @@ J.apngFrameIndex=(animation,cut,t)=>{
 };
 const prune=(animation,keep)=>{for(const [index,image] of animation.cache){if(animation.cache.size<=animation.limit)break;if(index!==keep&&!animation.pins.has(index)){animation.cache.delete(index);closeImage(image);}}};
 J.apngFrame=async(asset,index)=>{
-  const a=asset.animation;if(a.released)throw new Error('APNG asset released');if(index===0)return a.element;
+  const a=asset.animation;if(a.released)throw new Error('Animated image asset released');if(index===0)return a.element;
   if(a.cache.has(index)){const image=a.cache.get(index);a.cache.delete(index);a.cache.set(index,image);return image;}
   if(a.pending.has(index))return a.pending.get(index);
-  const pending=(async()=>{const image=await decodeImage(a.frames[index]);if(a.released){closeImage(image);throw new Error('APNG asset released');}a.cache.set(index,image);prune(a,index);window.dispatchEvent(new Event('jizura-media-ready'));return image;})();
+  const pending=(async()=>{const image=await decodeImage(a.frames[index]);if(a.released){closeImage(image);throw new Error('Animated image asset released');}a.cache.set(index,image);prune(a,index);window.dispatchEvent(new Event('jizura-media-ready'));return image;})();
   a.pending.set(index,pending);try{return await pending;}finally{a.pending.delete(index);}
 };
 J.mediaFrameSource=(asset,cut,t)=>{

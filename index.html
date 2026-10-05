@@ -981,7 +981,7 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 
       <div class="sec" id="mediaPane" hidden>
         <div class="sec-h media-pane-heading"><h2 id="mediaPaneTitle">背景</h2></div>
-        <div class="media-upload-row"><p class="hint">画像・動画をここへドラッグ＆ドロップ、または「追加」から選択できます。素材はこのブラウザに保存されます。</p><label class="file">追加<input id="mediaFiles" type="file" accept="image/*,video/*,.apng" multiple></label></div>
+        <div class="media-upload-row"><p class="hint">画像・動画をここへドラッグ＆ドロップ、または「追加」から選択できます。素材はこのブラウザに保存されます。</p><label class="file">追加<input id="mediaFiles" type="file" accept="image/*,video/*,.apng,.gif" multiple></label></div>
         <div id="mediaList" class="media-list"></div>
         <div id="mediaCutInsert" class="media-lyric-insert">
           <fieldset id="backgroundInsertSources" hidden><legend>一括挿入する項目</legend></fieldset>
@@ -5015,7 +5015,7 @@ J.composeLyricArea = (cut, { w, h, obstacles = [], zone = null, fgCenter = null,
 };
 })();
 
-/* APNG frame timing and composition. Each frame is decoded as a static PNG,
+/* Animated-image frame timing and composition. Each frame is decoded as a static image,
    so preview, seeking and export use the project clock rather than an <img> clock. */
 (() => {
 'use strict';
@@ -5060,7 +5060,7 @@ J.parseAPNG=buffer=>{
   if(!control||frames.length!==control.frames||!defaultData.length)throw invalid();
   const png=(w,h,parts)=>{const ihdr=header.slice(),v=new DataView(ihdr.buffer);v.setUint32(0,w);v.setUint32(4,h);return new Blob([signature,chunk('IHDR',ihdr),...shared,...parts.map(p=>chunk('IDAT',p)),chunk('IEND',new Uint8Array())],{type:'image/png'});};
   for(const f of frames){f.png=png(f.width,f.height,f.data);delete f.data;}
-  return {width,height,plays:control.plays,frames,defaultImage:png(width,height,defaultData)};
+  return {format:'apng',width,height,plays:control.plays,frames,defaultImage:png(width,height,defaultData)};
 };
 const decodeImage=async blob=>{
   if(typeof createImageBitmap==='function')return createImageBitmap(blob);
@@ -5068,25 +5068,27 @@ const decodeImage=async blob=>{
   try{image.src=url;await image.decode();return image;}catch(error){image.removeAttribute('src');throw error;}finally{URL.revokeObjectURL(url);}
 };
 const closeImage=image=>{if(image?.close)image.close();else image?.removeAttribute?.('src');};
-const canvasBlob=canvas=>new Promise((resolve,reject)=>canvas.toBlob(blob=>blob?resolve(blob):reject(new Error('Could not prepare APNG frame')),'image/png'));
-J.decodeAPNG=async(file,onProgress=()=>{})=>{
-  const parsed=J.parseAPNG(await file.arrayBuffer());if(!parsed)return null;
+const canvasBlob=canvas=>new Promise((resolve,reject)=>canvas.toBlob(blob=>blob?resolve(blob):reject(new Error('Could not prepare animation frame')),'image/png'));
+J.composeImageAnimation=async(parsed,onProgress=()=>{})=>{
   const canvas=document.createElement('canvas');canvas.width=parsed.width;canvas.height=parsed.height;
   const ctx=canvas.getContext('2d'),element=document.createElement('canvas');element.width=canvas.width;element.height=canvas.height;
+  const fill=(frame,color)=>{ctx.clearRect(frame.x,frame.y,frame.width,frame.height);if(color?.[3]){ctx.fillStyle=`rgba(${color[0]},${color[1]},${color[2]},${color[3]/255})`;ctx.fillRect(frame.x,frame.y,frame.width,frame.height);}};
+  if(parsed.background)fill({x:0,y:0,width:canvas.width,height:canvas.height},parsed.background);
   const frames=[],ends=[];let duration=0;
   for(const [index,frame] of parsed.frames.entries()){
     const previous=frame.dispose===2&&index?ctx.getImageData(frame.x,frame.y,frame.width,frame.height):null;
-    const image=await decodeImage(frame.png);
+    const image=await decodeImage(frame.image||frame.png);
     try{if(frame.blend===0)ctx.clearRect(frame.x,frame.y,frame.width,frame.height);ctx.drawImage(image,frame.x,frame.y);}finally{closeImage(image);}
     if(index===0)element.getContext('2d').drawImage(canvas,0,0);
     frames.push(await canvasBlob(canvas));duration+=frame.delay;ends.push(duration);
-    if(frame.dispose===1||frame.dispose===2&&!index)ctx.clearRect(frame.x,frame.y,frame.width,frame.height);
+    if(frame.dispose===1||frame.dispose===2&&!index)fill(frame,frame.background);
     else if(previous)ctx.putImageData(previous,frame.x,frame.y);
     onProgress({phase:'decode',frame:index+1,total:parsed.frames.length});
   }
   canvas.width=canvas.height=1;
-  return {element,defaultImage:parsed.defaultImage,frames,ends,duration,plays:parsed.plays,cache:new Map(),pending:new Map(),pins:new Set(),limit:Math.max(2,Math.floor(32*1024*1024/(element.width*element.height*4))),released:false};
+  return {format:parsed.format,element,defaultImage:parsed.defaultImage||frames[0],frames,ends,duration,plays:parsed.plays,cache:new Map(),pending:new Map(),pins:new Set(),limit:Math.max(2,Math.floor(32*1024*1024/(element.width*element.height*4))),released:false};
 };
+J.decodeAPNG=async(file,onProgress=()=>{})=>{const parsed=J.parseAPNG(await file.arrayBuffer());return parsed?J.composeImageAnimation(parsed,onProgress):null;};
 J.apngFrameIndex=(animation,cut,t)=>{
   const elapsed=Math.max(0,+cut.animationStart||0)+Math.max(0,t-cut.start),plays=cut.animationLoop==='loop'?0:cut.animationLoop==='once'?1:animation.plays;
   if(plays&&elapsed>=animation.duration*plays-1e-9)return animation.frames.length-1;
@@ -5096,10 +5098,10 @@ J.apngFrameIndex=(animation,cut,t)=>{
 };
 const prune=(animation,keep)=>{for(const [index,image] of animation.cache){if(animation.cache.size<=animation.limit)break;if(index!==keep&&!animation.pins.has(index)){animation.cache.delete(index);closeImage(image);}}};
 J.apngFrame=async(asset,index)=>{
-  const a=asset.animation;if(a.released)throw new Error('APNG asset released');if(index===0)return a.element;
+  const a=asset.animation;if(a.released)throw new Error('Animated image asset released');if(index===0)return a.element;
   if(a.cache.has(index)){const image=a.cache.get(index);a.cache.delete(index);a.cache.set(index,image);return image;}
   if(a.pending.has(index))return a.pending.get(index);
-  const pending=(async()=>{const image=await decodeImage(a.frames[index]);if(a.released){closeImage(image);throw new Error('APNG asset released');}a.cache.set(index,image);prune(a,index);window.dispatchEvent(new Event('jizura-media-ready'));return image;})();
+  const pending=(async()=>{const image=await decodeImage(a.frames[index]);if(a.released){closeImage(image);throw new Error('Animated image asset released');}a.cache.set(index,image);prune(a,index);window.dispatchEvent(new Event('jizura-media-ready'));return image;})();
   a.pending.set(index,pending);try{return await pending;}finally{a.pending.delete(index);}
 };
 J.mediaFrameSource=(asset,cut,t)=>{
@@ -5127,6 +5129,49 @@ J.prepareAPNGFrames=async(plan,t,signal)=>{
   if(signal?.aborted)throw new Error('Cancelled');
 };
 J.releaseAPNG=animation=>{animation.released=true;for(const image of animation.cache.values())closeImage(image);animation.cache.clear();animation.frames.length=0;animation.element.width=animation.element.height=1;};
+})();
+
+/* GIF87a/89a image frames. Native static GIF decoding handles LZW and interlace;
+   disposal and timing share the deterministic APNG composition/render path. */
+(() => {
+'use strict';
+const invalid=()=>new Error(J.mediaLabel('GIFファイルが壊れています','Invalid GIF file'));
+J.parseGIF=buffer=>{
+  const bytes=buffer instanceof Uint8Array?buffer:new Uint8Array(buffer);
+  const header=String.fromCharCode(...bytes.subarray(0,6));if(header!=='GIF87a'&&header!=='GIF89a')return null;
+  let offset=6;const take=n=>{if(n>bytes.length-offset)throw invalid();const data=bytes.subarray(offset,offset+n);offset+=n;return data;};
+  const byte=()=>take(1)[0],word=data=>data[0]|data[1]<<8,screen=take(7),width=word(screen),height=word(screen.subarray(2));if(!width||!height)throw invalid();
+  const global=screen[4]&128?take(3*(2<< (screen[4]&7))):null;
+  const background=global&&screen[5]*3+2<global.length?[...global.subarray(screen[5]*3,screen[5]*3+3),255]:null;
+  const blocks=()=>{const parts=[];for(let n=byte();n;n=byte())parts.push(take(n));return parts;};
+  const frames=[];let control=null,plays=1,ended=false;
+  while(offset<bytes.length){
+    const marker=byte();if(marker===0x3b){ended=true;break;}
+    if(marker===0x21){
+      const label=byte();
+      if(label===0xf9){if(byte()!==4)throw invalid();const data=take(4);if(byte()!==0)throw invalid();const dispose=data[0]>>2&7;if(dispose>3)throw invalid();control={dispose,delay:Math.max(.01,word(data.subarray(1))/100),transparent:data[0]&1?data[3]:null};}
+      else if(label===0xff){const id=String.fromCharCode(...take(byte())),parts=blocks();if(id==='NETSCAPE2.0'||id==='ANIMEXTS1.0'){const data=parts[0];if(!data||data.length!==3||data[0]!==1)throw invalid();const repeats=word(data.subarray(1));plays=repeats===0?0:repeats+1;}}
+      else if(label===0x01)throw new Error(J.mediaLabel('テキスト描画を含むGIFには対応していません','GIF plain-text rendering is not supported'));
+      else blocks();
+      continue;
+    }
+    if(marker!==0x2c)throw invalid();
+    const descriptor=take(9),x=word(descriptor),y=word(descriptor.subarray(2)),w=word(descriptor.subarray(4)),h=word(descriptor.subarray(6));
+    if(!w||!h||x+w>width||y+h>height)throw invalid();
+    const local=descriptor[8]&128?take(3*(2<<(descriptor[8]&7))):null;if(!local&&!global)throw invalid();
+    const start=offset,min=byte();if(min<2||min>8)throw invalid();const data=blocks();if(!data.length)throw invalid();
+    const c=control||{dispose:0,delay:.01,transparent:null};control=null;
+    // Each native decode has only one image, located at (0,0) on its own screen.
+    const patchScreen=new Uint8Array([w&255,w>>8,h&255,h>>8,global?(screen[4]&0x87):0,screen[5],0]);
+    const patchDescriptor=descriptor.slice();patchDescriptor.fill(0,0,4);
+    const transparency=c.transparent===null?[]:[new Uint8Array([0x21,0xf9,4,1,0,0,c.transparent,0])];
+    const image=new Blob([bytes.subarray(0,6),patchScreen,...(global?[global]:[]),...transparency,new Uint8Array([0x2c]),patchDescriptor,...(local?[local]:[]),bytes.subarray(start,offset),new Uint8Array([0x3b])],{type:'image/gif'});
+    frames.push({width:w,height:h,x,y,delay:c.delay,dispose:c.dispose===3?2:c.dispose===2?1:0,blend:1,background:c.transparent===null?background:null,image,transparent:c.transparent});
+  }
+  if(!ended||!frames.length||offset!==bytes.length)throw invalid();
+  return {format:'gif',width,height,plays,frames,background:frames[0].transparent===null?background:null};
+};
+J.decodeGIF=async(file,onProgress=()=>{})=>{const parsed=J.parseGIF(await file.arrayBuffer());return parsed&&parsed.frames.length>1?J.composeImageAnimation(parsed,onProgress):null;};
 })();
 
 /* Dynamic background layouts (詳細 → 背景 → 背景をダイナミックに配置).
@@ -5757,12 +5802,12 @@ J.releaseMediaAsset = asset => {
 J.attachMedia = async (item, file, assets = J.mediaAssets, onProgress = () => {}) => {
   file = await J.snapshotMediaFile(file,(loaded,total)=>onProgress({phase:'read',loaded,total}));
   onProgress({phase:'decode'});
-  if(item.type==='image' && (/image\/(?:png|apng)/i.test(file.type)||/\.(?:png|apng)$/i.test(item.name))){
-    const animation=await J.decodeAPNG(file,onProgress);
+  if(item.type==='image' && (/image\/(?:png|apng|gif)/i.test(file.type)||/\.(?:png|apng|gif)$/i.test(item.name))){
+    const animation=await J.decodeGIF(file,onProgress)||await J.decodeAPNG(file,onProgress);
     if(animation){
       const previous=assets.get(item.id);if(previous)J.releaseMediaAsset(previous);
       item.width=animation.element.width;item.height=animation.element.height;
-      item.animation={format:'apng',frames:animation.frames.length,duration:animation.duration,plays:animation.plays};
+      item.animation={format:animation.format,frames:animation.frames.length,duration:animation.duration,plays:animation.plays};
       const posterUrl=URL.createObjectURL(animation.defaultImage),posterElement=new Image();posterElement.src=posterUrl;
       assets.set(item.id,{element:animation.element,type:'image',animation,poster:posterUrl,posterUrl,posterElement,file});
       return animation.element;
@@ -44662,7 +44707,7 @@ function importProgressDialog(id, heading, delay=0) {
   };
 }
 async function addMediaFiles(files, layer) {
-  files=files.filter(file=>/^(image|video)\//.test(file.type)||/\.(png|apng)$/i.test(file.name));
+  files=files.filter(file=>/^(image|video)\//.test(file.type)||/\.(png|apng|gif)$/i.test(file.name));
   if(!files.length)return;
   if(S.projectBusy || S.exporting){toast(J.mediaLabel('処理が完了してから素材を追加してください','Wait for the current operation before adding assets'));return;}
   S.projectBusy=true;
@@ -44672,7 +44717,7 @@ async function addMediaFiles(files, layer) {
   for (const [index,file] of files.entries()) {
     const report=(text,value=null)=>loading.report(text+` (${index+1}/${files.length})：${file.name}`,value);
     report(J.mediaLabel('読み込み中','Loading'));
-    const type = file.type.startsWith('image/') || /\.(png|apng)$/i.test(file.name) ? 'image' : J.isVideoFile(file) ? 'video' : null;
+    const type = file.type.startsWith('image/') || /\.(png|apng|gif)$/i.test(file.name) ? 'image' : J.isVideoFile(file) ? 'video' : null;
     if (!type) continue;
     const existing = m.items.find(x => x.name === file.name && x.size === file.size && !J.mediaAssets.has(x.id));
     const item = existing || { id: crypto.randomUUID(), name: file.name, size: file.size, type };
