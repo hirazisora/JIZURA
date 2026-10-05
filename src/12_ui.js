@@ -310,14 +310,14 @@ function sizeViewport() {
 function syncMainMediaPreview() {
   if(!$('cutDetailsDialog')?.open&&!$('effectFavoritesDialog')?.open&&!($('exportDlg')?.open&&S.exportKind==='short'))J.syncMediaPreview(S.plan,S.t,S.playing);
 }
-function drawPreviewFrame(ctx, {renderer=S.renderer,fast=false}={}) {
+function drawPreviewFrame(ctx, {renderer=S.renderer,fast=false,time=S.t}={}) {
   const previewCuts = S.areaEdit && S.areaEdit.kind === 'lyric' && S.areaEdit.draft ? S.plan.cuts.filter(cut => cut.line === S.areaEdit.index) : [];
   const previousAreas = previewCuts.map(cut => cut.area);
   previewCuts.forEach(cut => { cut.area = { ...S.areaEdit.draft, angle: S.areaEdit.angle }; });
   const edit = S.areaEdit, mediaCut = edit && edit.kind !== 'lyric' && S.plan[edit.kind].cuts[edit.index];
   const previousMedia = mediaCut && { placement: mediaCut.placement, zoom: mediaCut.zoom, hold: mediaCut.hold, enter: mediaCut.enter, exit: mediaCut.exit, trans: mediaCut.trans };
   if (mediaCut) Object.assign(mediaCut, { placement: { cx: edit.draft.x + edit.draft.w / 2, cy: edit.draft.y + edit.draft.h / 2, w: edit.draft.w, h: edit.draft.h, lockAspect: edit.lockAspect, angle: edit.angle }, zoom: 100, hold: 'still', enter: 'cut', exit: 'cut', trans: undefined });
-  try { renderer.frame(ctx, S.plan, S.t, { scale: ctx.canvas.width / S.plan.W, fast, noTrans: !!edit, noPost: !!edit, previewEdit: !!edit && edit.kind !== 'lyric', noForeground: !!edit && edit.kind === 'media' }); }
+  try { renderer.frame(ctx, S.plan, time, { scale: ctx.canvas.width / S.plan.W, fast, noTrans: !!edit, noPost: !!edit, previewEdit: !!edit && edit.kind !== 'lyric', noForeground: !!edit && edit.kind === 'media' }); }
   finally { previewCuts.forEach((cut, i) => { cut.area = previousAreas[i]; }); if (mediaCut) Object.assign(mediaCut, previousMedia); }
 }
 function draw() {
@@ -1212,6 +1212,7 @@ function openCutDetails(layer,index,part=0) {
     motionScale:['動きの倍率','Motion scale'],contentScale:['文字サイズ倍率','Text scale'],effectSettings:['演出パラメータ','Effect parameters'],
     motion:['動きの強さ','Motion amount'],treatment:['加工の強さ','Treatment amount'],duration:['登場・退場時間（秒）','Entrance / exit duration (s)'],bpm:['BPM','BPM'],beatOffset:['拍の開始位置（秒）','Beat offset (s)'],x:['左位置','Left'],y:['上位置','Top'],cx:['中心 X','Center X'],cy:['中心 Y','Center Y'],w:['幅','Width'],h:['高さ','Height'],angle:['角度（度）','Angle (degrees)'],lockAspect:['縦横比を固定','Lock aspect ratio'],
     untilNext:['次カット再生まで','Until the next cut'],endTime:['終了位置（秒）','End position (s)'],technique:['手法','Technique'],entrance:['登場','Entrance'],departure:['退場','Exit'],itemId:['素材','Asset'],frontmost:['最前に表示','Frontmost'],blend:['合成方法','Blend mode'],opacity:['不透明度（％）','Opacity (%)'],videoLoop:['動画をループ再生','Loop video'],videoStart:['素材の再生開始位置（秒）','Source start time (s)'],videoDuration:['動画の長さ（秒）','Video duration (s)'],chromaKey:['クロマキー合成','Chroma key'],chromaColor:['クロマキー色','Key color'],
+    animationLoop:['アニメーションの再生','Animation playback'],animationStart:['アニメーションの開始位置（秒）','Animation start time (s)'],
     font:['フォント','Font'],size:['サイズ','Size'],scale:['倍率','Scale'],rotation:['回転','Rotation'],color:['色','Color'],alpha:['不透明度','Opacity'],seed:['乱数シード','Random seed'],n:['個数','Count'],id:['種類','Type'],sx:['横方向倍率','Horizontal scale'],sy:['縦方向倍率','Vertical scale'],
   };
   const label = key => ({enterP:L('登場の詳細','Entrance parameters'),holdP:L('保持の詳細','Hold parameters'),exitP:L('退場の詳細','Exit parameters'),techniqueP:L('手法の詳細','Technique parameters'),entranceP:L('登場の詳細','Entrance parameters'),departureP:L('退場の詳細','Exit parameters')}[key]) || (names[key] ? L(...names[key]) : J.detailFieldLabel(key));
@@ -1220,7 +1221,7 @@ function openCutDetails(layer,index,part=0) {
     const def=root==='decor'?J.DECOR[current.decor?.[+index]?.id]:g?(lyric?J.registry(g)[current[g]]:J.MEDIA_TECH[current[g]]):null;
     const names=def?.customDefinition?.labels?.[field];return names?L(names.ja||field,names.en||names.ja||field):null;
   }
-  const nativeKeys = lyric ? ['frontmost','blend','opacity'] : ['itemId','technique','entrance','departure','blend','opacity','placement','videoLoop','videoStart','videoDuration','chromaKey','chromaColor'];
+  const nativeKeys = lyric ? ['frontmost','blend','opacity'] : ['itemId','technique','entrance','departure','blend','opacity','placement','videoLoop','videoStart','videoDuration','animationLoop','animationStart','chromaKey','chromaColor'];
   function preview() {
     rememberDetail();
     clearTimeout(previewTimer);
@@ -1259,6 +1260,7 @@ function openCutDetails(layer,index,part=0) {
     schedulePreview();
   }
   function options(field) {
+    if(field==='animationLoop') return [['auto',L('ファイルの設定通り','As specified by the file')],['once',L('1回再生','Play once')],['loop',L('繰り返し再生','Loop')]];
     if(field==='blend') return ['normal','multiply','screen','overlay'].map((v,i)=>[v,[L('通常','Normal'),L('乗算','Multiply'),L('スクリーン','Screen'),L('オーバーレイ','Overlay')][i]]);
     if(field==='itemId') return [['',L('画像無し','No image')],...J.mediaCopyItems(layer).map(a=>[a.id,a.name]),...S.project[layer].items.map(a=>[a.id,a.name])];
     if(field==='scheme') return S.plan.style.schemes.map((_,i)=>[String(i),String(i+1)]);
@@ -1554,6 +1556,7 @@ function openCutDetails(layer,index,part=0) {
     }
     for(const field of nativeKeys) {
       if(['videoLoop','videoStart','videoDuration','chromaKey','chromaColor'].includes(field)&&current.type!=='video')continue;
+      if(['animationLoop','animationStart'].includes(field)&&!current.animation)continue;
       let value=draft[field]??current[field];
       if(['technique','entrance','departure'].includes(field)&&Object.hasOwn(draft,field))value=draft[field]??'';
       if(field==='placement')value ||= {cx:.5,cy:.5,w:1,h:1,angle:0,lockAspect:true};
@@ -1583,7 +1586,7 @@ function openCutDetails(layer,index,part=0) {
       fieldEditor(grid,field,clone(value),v=>write(field,field==='scheme'?+v:v,false));
     }
     const categories=[
-      ['basic',L('基本','Basic'),['start','untilNext','endTime','lock','text','note','itemId','frontmost','blend','opacity','videoLoop','videoStart','videoDuration','chromaKey','chromaColor']],
+      ['basic',L('基本','Basic'),['start','untilNext','endTime','lock','text','note','itemId','frontmost','blend','opacity','videoLoop','videoStart','videoDuration','animationLoop','animationStart','chromaKey','chromaColor']],
       ['style',L('スタイル','Style'),['layout','params','scheme','fonts','palette','fontParams','effectStyle']],
       ['motion',L('モーション','Motion'),['techniqueP','entranceP','departureP','enterP','holdP','exitP','technique','entrance','departure','enter','hold','exit','inDur','outDur','stagger','motionScale','cam','camP','independentPhases']],
       ['effects',L('加工・演出','Effects'),['treat','treatP','bg','bgP','trans','transP','transDur','effectSettings','effectFx','effectEvents']],
@@ -2738,6 +2741,7 @@ function splitMediaCut(layer,randomLeft=false,randomRight=false) {
     second.videoDuration=cut.end-time;
     first.videoLoop=second.videoLoop=cut.videoLoop;
   }
+  if(cut.animation){first.animationStart=cut.animationStart;second.animationStart=cut.animationStart+time-cut.start;first.animationLoop=second.animationLoop=cut.animationLoop;}
   cuts.forEach((c,i)=>{
     const next=i>index?i+1:i;
     overrides[next]=i===index?first:{...clone(m.cutOverrides[i] || {}),itemId:c.itemId};
@@ -2828,7 +2832,7 @@ function importProgressDialog(id, heading, delay=0) {
   };
 }
 async function addMediaFiles(files, layer) {
-  files=files.filter(file=>/^(image|video)\//.test(file.type));
+  files=files.filter(file=>/^(image|video)\//.test(file.type)||/\.(png|apng)$/i.test(file.name));
   if(!files.length)return;
   if(S.projectBusy || S.exporting){toast(J.mediaLabel('処理が完了してから素材を追加してください','Wait for the current operation before adding assets'));return;}
   S.projectBusy=true;
@@ -2838,7 +2842,7 @@ async function addMediaFiles(files, layer) {
   for (const [index,file] of files.entries()) {
     const report=(text,value=null)=>loading.report(text+` (${index+1}/${files.length})：${file.name}`,value);
     report(J.mediaLabel('読み込み中','Loading'));
-    const type = file.type.startsWith('image/') ? 'image' : file.type.startsWith('video/') ? 'video' : null;
+    const type = file.type.startsWith('image/') || /\.(png|apng)$/i.test(file.name) ? 'image' : J.isVideoFile(file) ? 'video' : null;
     if (!type) continue;
     const existing = m.items.find(x => x.name === file.name && x.size === file.size && !J.mediaAssets.has(x.id));
     const item = existing || { id: crypto.randomUUID(), name: file.name, size: file.size, type };
@@ -2912,6 +2916,10 @@ function renderMediaLines() {
     li.querySelector('.time').addEventListener('change', e => { m.timing.lineTimes[i] = Math.max(0, parseFloat(e.target.value) || 0); replan(); });
     li.querySelector('.media-cut-file').addEventListener('change', e => setMediaCutAsset(layer,i,e.target.value || null));
     li.querySelector('.media-technique').addEventListener('change', e => { if (e.target.value !== 'legacy') { mediaOv(i, { technique: e.target.value || null, lock: false, lockedTechnique: undefined }, layer); replan(); } });
+    if(cut.animation){
+      li.querySelector('.meta').insertAdjacentHTML('beforeend',`<label class="media-video-loop">${J.mediaLabel('アニメーションの再生','Animation playback')}<select class="media-animation-loop">${[['auto',J.mediaLabel('ファイルの設定通り','As specified by the file')],['once',J.mediaLabel('1回再生','Play once')],['loop',J.mediaLabel('繰り返し再生','Loop')]].map(([value,label])=>`<option value="${value}" ${cut.animationLoop===value?'selected':''}>${label}</option>`).join('')}</select></label>`);
+      li.querySelector('.media-animation-loop').onchange=e=>{mediaOv(i,{animationLoop:e.target.value},layer);replan();};
+    }
     const videoLoop = li.querySelector('.media-video-loop input');
     if (videoLoop) videoLoop.addEventListener('change', e => { mediaOv(i, { videoLoop: e.target.checked }); replan(); });
     const videoStart = li.querySelector('.media-video-start');
@@ -4237,15 +4245,15 @@ function bind() {
   screenshot.addEventListener('click',async()=>{
     screenshot.disabled=true;
     try{
-      const filename=J.exportFilename(`${baseName()}_preview_${S.t.toFixed(3).replace('.','-')}`,'.png');
+      const time=S.t,filename=J.exportFilename(`${baseName()}_preview_${time.toFixed(3).replace('.','-')}`,'.png');
       const [w,h]=J.outputSize(S.project),canvas=document.createElement('canvas');
       canvas.width=w;canvas.height=h;
       const previousRes=J.glyphs.maxRes;
       try{
         J.glyphs.maxRes=h>=1000?768:512;
-        // Render immediately from the current video frames and preview edits,
-        // without changing playback or enlarging the low-resolution preview.
-        drawPreviewFrame(canvas.getContext('2d'),{renderer:new J.Renderer()});
+        // Prepare the animation at the captured project time, then render at the output size.
+        await J.prepareAPNGFrames(S.plan,time);
+        drawPreviewFrame(canvas.getContext('2d'),{renderer:new J.Renderer(),time});
       }finally{J.glyphs.maxRes=previousRes;}
       const blob=await new Promise((resolve,reject)=>canvas.toBlob(blob=>blob?resolve(blob):reject(new Error(J.mediaLabel('PNGを作成できませんでした','Could not create PNG'))),'image/png'));
       await J.saveFile(filename,blob);
