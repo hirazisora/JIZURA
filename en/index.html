@@ -480,6 +480,8 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
 .header-menu[open] summary { color: var(--amber); }
 .header-menu-items { position: absolute; right: 0; top: calc(100% + 6px); z-index: 100; display: flex; flex-direction: column; gap: 4px; padding: 8px; min-width: 220px; background: var(--panel); border: 1px solid var(--line2); border-radius: var(--r); box-shadow: 0 12px 30px #0008; }
 .header-menu-items button, .header-menu-items .file { width: 100%; text-align: left; justify-content: flex-start; white-space: nowrap; }
+#helpMenu a { display:flex; align-items:center; justify-content:space-between; gap:20px; min-height:40px; padding:8px 12px; border:1px solid var(--line2); border-radius:var(--r); color:var(--text); background:var(--raised); text-decoration:none; }
+#helpMenu a:hover { background:var(--raised2); border-color:var(--amber); }
 /* Compact (tablet) header puts the menus at the left edge: open them to the right. Phones use the fixed full-width rule below. */
 @media (min-width: 761px) { #app.compact-ui .header-menu-items { left: 0; right: auto; } }
 .export-dialog .fields { margin-bottom: 12px; }
@@ -940,7 +942,12 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
           <button id="btnAE" title="Export project data for the After Effects panel">Export for AE</button>
         </div>
       </details>
-      <button id="btnTerms" class="ghost terms-open" title="Rights and licenses for your exports">About / rights</button>
+      <details class="header-menu" id="helpMenu">
+        <summary>Help</summary><div class="header-menu-items">
+          <a id="manualLink" href="../manual/?lang=en" target="_blank" rel="noopener" title="Manual (opens in a new tab)">Manual <span aria-hidden="true">↗</span></a>
+          <button id="btnTerms" class="ghost terms-open" title="Rights and licenses for your exports">About this site</button>
+        </div>
+      </details>
     </div>
   </header>
 
@@ -1196,7 +1203,7 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 
 <dialog id="termsDlg" class="terms" aria-labelledby="termsTitle">
   <form method="dialog">
-    <h2 id="termsTitle">About / rights</h2>
+    <h2 id="termsTitle">About this site</h2>
     <section class="terms-section" aria-labelledby="termsOriginalTitle">
       <h3 id="termsOriginalTitle">Original edition (852wa/JIZURA)</h3>
     <div class="terms-main">
@@ -46033,9 +46040,10 @@ function bind() {
   const menus = [...document.querySelectorAll('.header-menu')];
   menus.forEach(menu => {
     menu.addEventListener('toggle', () => { if (menu.open) menus.forEach(other=>{if(other!==menu)other.open=false;}); });
-    menu.addEventListener('click', e => { if (e.target.closest('button')) menu.open=false; });
+    menu.addEventListener('click', e => { if (e.target.closest('button,a')) menu.open=false; });
   });
   document.addEventListener('click', e => menus.forEach(menu=>{if(!menu.contains(e.target))menu.open=false;}));
+  document.addEventListener('keydown', e => {if(e.key==='Escape'&&!document.querySelector('dialog[open]')){const menu=menus.find(m=>m.open);if(menu){menu.open=false;menu.querySelector('summary').focus();}}});
   document.addEventListener('keydown', e => {if(e.key==='Escape')menus.forEach(menu=>{menu.open=false;});});
   ['fileProject','fileSettings'].forEach(id => J.configurePortableFileInput($(id)));
   $('fileProject').closest('label').addEventListener('keydown', e => {if(e.key==='Enter'||e.key===' '){e.preventDefault();$('fileProject').click();}});
@@ -46663,7 +46671,9 @@ function bind() {
   $('ePalette').addEventListener('click', () => { randomPalette(); restartPreview(); });
   // 利用について（出力物の権利 · ライセンス）
   const dlg = $('termsDlg');
-  const openTerms = () => { if (dlg.showModal) { if (!dlg.open) dlg.showModal(); } else dlg.setAttribute('open', ''); };
+  let termsOpener=null;
+  const openTerms = e => { termsOpener=e.currentTarget; if (dlg.showModal) { if (!dlg.open) dlg.showModal(); } else dlg.setAttribute('open', ''); };
+  dlg.addEventListener('close',()=>{const target=termsOpener?.closest('#helpMenu')?$('helpMenu').querySelector('summary'):termsOpener;target?.focus();});
   document.querySelectorAll('.terms-open').forEach(b => b.addEventListener('click', openTerms));
   $('btnNew').addEventListener('click', () => { if (!S.exporting && !S.projectBusy) $('newProjectDlg').showModal(); });
   $('btnCreateProject').addEventListener('click', () => {

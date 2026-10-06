@@ -36,6 +36,9 @@ def es_escape(src):
 
 # 1) panel page: the browser app + a Node-context guard for the MP4 muxer + the AE bridge
 html = open(app_html, encoding='utf-8').read()
+# The packaged panels keep their manual alongside index.html, including English.
+html = html.replace('href="../manual/?lang=en"', 'href="manual/?lang=en&edition=cep"').replace('href="manual/"', 'href="manual/?edition=cep"')
+if os.path.isdir('manual'): shutil.copytree('manual', os.path.join(ext, 'manual'))
 guard = "<script>if(!window.Mp4Muxer&&typeof module!=='undefined'&&module&&module.exports&&module.exports.Muxer)window.Mp4Muxer=module.exports;</script>\n"
 i = html.index('</script>') + len('</script>\n')          # right after the mp4-muxer script
 html = html[:i] + guard + html[i:]

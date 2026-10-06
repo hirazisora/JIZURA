@@ -3915,9 +3915,10 @@ function bind() {
   const menus = [...document.querySelectorAll('.header-menu')];
   menus.forEach(menu => {
     menu.addEventListener('toggle', () => { if (menu.open) menus.forEach(other=>{if(other!==menu)other.open=false;}); });
-    menu.addEventListener('click', e => { if (e.target.closest('button')) menu.open=false; });
+    menu.addEventListener('click', e => { if (e.target.closest('button,a')) menu.open=false; });
   });
   document.addEventListener('click', e => menus.forEach(menu=>{if(!menu.contains(e.target))menu.open=false;}));
+  document.addEventListener('keydown', e => {if(e.key==='Escape'&&!document.querySelector('dialog[open]')){const menu=menus.find(m=>m.open);if(menu){menu.open=false;menu.querySelector('summary').focus();}}});
   document.addEventListener('keydown', e => {if(e.key==='Escape')menus.forEach(menu=>{menu.open=false;});});
   ['fileProject','fileSettings'].forEach(id => J.configurePortableFileInput($(id)));
   $('fileProject').closest('label').addEventListener('keydown', e => {if(e.key==='Enter'||e.key===' '){e.preventDefault();$('fileProject').click();}});
@@ -4545,7 +4546,9 @@ function bind() {
   $('ePalette').addEventListener('click', () => { randomPalette(); restartPreview(); });
   // 利用について（出力物の権利・ライセンス）
   const dlg = $('termsDlg');
-  const openTerms = () => { if (dlg.showModal) { if (!dlg.open) dlg.showModal(); } else dlg.setAttribute('open', ''); };
+  let termsOpener=null;
+  const openTerms = e => { termsOpener=e.currentTarget; if (dlg.showModal) { if (!dlg.open) dlg.showModal(); } else dlg.setAttribute('open', ''); };
+  dlg.addEventListener('close',()=>{const target=termsOpener?.closest('#helpMenu')?$('helpMenu').querySelector('summary'):termsOpener;target?.focus();});
   document.querySelectorAll('.terms-open').forEach(b => b.addEventListener('click', openTerms));
   $('btnNew').addEventListener('click', () => { if (!S.exporting && !S.projectBusy) $('newProjectDlg').showModal(); });
   $('btnCreateProject').addEventListener('click', () => {
