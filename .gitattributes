@@ -1,0 +1,2 @@
+# Preserve original manual PDFs as binary assets.
+manual/*.pdf binary
