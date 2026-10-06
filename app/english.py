@@ -563,6 +563,8 @@ FORK_MEDIA = dict(FORK_UI, **{
 
 
 def localize_body(source):
+    source = source.replace('href="manual/"', 'href="../manual/?lang=en"')
+    source = source.replace('マニュアル（別タブで開く）', 'Manual (opens in a new tab)').replace('このサイトについて', 'About this site').replace('使い方', 'Help').replace('マニュアル', 'Manual')
     # One longest-first pass over both glossaries (fork labels win on duplicates): short words from either
     # (歌詞, 前景, 追加 …) can never split a longer label or sentence from the other.
     return replace_copy(source, {**BODY, **FORK_BODY}).replace('You own the<strong>', 'You own the <strong>')
