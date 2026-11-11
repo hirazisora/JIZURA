@@ -65,6 +65,16 @@ const groups = [
   ['ビート','拍子','リズム','beat','beats','rhythm'],
   ['シャッター','ブラインド','スリット','shutter','shutters','blinds','slit','slits','slat','slats'],
   ['窓','ウィンドウ','ウインドウ','window','windows'],
+  // Words common in the 追加分2 part names.
+  ['線','せん','ライン','line','lines'],
+  ['罫線','罫','けいせん','ルール','rule','rules'],
+  ['点','てん','dot','dots','dotted'],
+  ['灯り','明かり','あかり','灯','ともしび','ランプ','提灯','灯籠','lamp','lantern','lanterns'],
+  ['紙','かみ','ペーパー','paper'],
+  ['折る','折り','折れ','おる','おり','fold','folding','folded','origami'],
+  ['和風','和柄','わふう','和モダン','japanese','traditional'],
+  ['墨','すみ','インク','ink'],
+  ['斜体','しゃたい','イタリック','italic','skew','oblique'],
 ].map(aliases => [...new Set(aliases.map(normalize))]);
 const escape = text => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const aliasGroups = new Map();
@@ -85,6 +95,19 @@ const concepts = text => {
 };
 const subsequence = (text,query) => {
   let pos=0;for(const char of query){pos=text.indexOf(char,pos);if(pos<0)return false;pos++;}return true;
+};
+// The other-language name of a part (追加分2 parts carry an English name; the English UI keeps the Japanese one), so a
+// part is found by either. Keys shared by several groups (a layout and a decor called chochin) give both.
+let altNames=null;
+J.detailSearchAlt = key => {
+  if(!altNames){
+    altNames=new Map();
+    for(const group of J.GROUP_KEYS||[])for(const [id,def] of Object.entries(J.registry(group)||{})){
+      const alt=[def.en,def.ja].filter(name=>name&&name!==def.name).join(' ');
+      if(alt)altNames.set(id,((altNames.get(id)||'')+' '+alt).trim());
+    }
+  }
+  return altNames.get(key)||'';
 };
 J.detailSearchQuery = query => {
   const normalized=normalize(query).trim(), parsed=concepts(normalized);

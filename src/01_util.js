@@ -152,6 +152,8 @@ J.isKata = c => /[゠-ヿㇰ-ㇿｦ-ﾟ]/.test(c);
 J.isSmallKana = c => 'ぁぃぅぇぉっゃゅょゎァィゥェォッャュョヮヵヶ'.includes(c);
 J.isPunct = c => /[、。，．,.!?！？…‥・「」『』（）()【】〈〉《》〔〕［］\[\]'"“”‘’ー〜～:：;；\-—―]/.test(c);
 J.isLatin = c => /[A-Za-z0-9]/.test(c);
+/* mostly Latin letters (English, Indonesian, Vietnamese … lyrics) — used by the 追加分2 layouts */
+J.isLatinText = t => { const s = String(t || '').replace(/\s/g, ''); if (!s) return false; const n = (s.match(/[A-Za-zÀ-ɏḀ-ỿ]/g) || []).length; return n / [...s].length >= 0.6; };
 J.VERT_ROTATE = 'ー〜～…‥―—-()（）「」『』【】〈〉《》〔〕[]［］→←:：;；=＝';
 
 /* ---- kana → romaji (for annotation labels; kanji left out) ---- */

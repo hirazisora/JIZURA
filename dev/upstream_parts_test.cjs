@@ -11,7 +11,7 @@ for(const [key,theme] of Object.entries(J.THEMES)){
 }
 const cv=document.createElement('canvas');cv.width=320;cv.height=180;
 for(const g of J.GROUP_KEYS)for(const id of J.order(g)){
- const def=J.registry(g)[id];if(!['typo','kinetic','horror'].includes(def.set))continue;counts[def.set]=(counts[def.set]||0)+1;
+ const def=J.registry(g)[id];if(def.x2||!['typo','kinetic','horror'].includes(def.set))continue;/* 追加分2 parts: extra2_parts_test */counts[def.set]=(counts[def.set]||0)+1;
  if(!seen.has(g+':'+id))failures.push('unreachable '+g+':'+id);
  try {
  const p=J.defaultProject();p.horror=true;p.lyrics='[00:00]記憶の向こう Hello world\n[00:04]夜を越えて';p.overrides={0:{layout:'center',[g]:g==='decor'?[id]:id}};

@@ -190,6 +190,8 @@ EXPORT = {
 }
 
 AE_UI = {
+    "'追加分2の演出も使う'": "'Include new effects 2'",
+    "'v0.12 で追加した部品。文字PV系・キネティック・ホラー・和風の新しい部品は、それぞれのチェックもオンのときに使います'": "'Parts added in v0.12. The new typographic, kinetic, horror and Japanese-motif parts are used only when their own checkbox is on as well'",
     "'文字PV系の部品を使う'": "'Use typographic parts'", "'キネティックの部品を使う'": "'Use kinetic parts'", "'ホラーの演出も使う'": "'Include horror effects'",
     "'線・数字・字組みだけで見せる、文字PVらしい部品（約50）'": "'About 50 parts that work with lines, numbers and type alone'",
     "'語ごとに動く・跳ねる・積み上がる、動き重視の部品（約50）'": "'About 50 motion-first parts: words move, bounce and stack one by one'",

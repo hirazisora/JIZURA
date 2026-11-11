@@ -15,6 +15,9 @@ global.OffscreenCanvas = function () { return el(); };
 global.Path2D = function () { return new Proxy({}, { get: () => noop }); };
 global.DOMMatrix = function () { return { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 }; };
 global.requestAnimationFrame = noop;
+// browser-only modules of this edition (person cut-out, help menu …) only need these to load
+global.addEventListener = global.removeEventListener = noop; global.dispatchEvent = () => true;
+if (!global.matchMedia) global.matchMedia = () => ({ matches: false, addEventListener: noop, removeEventListener: noop });
 for (const f of fs.readdirSync(path.join(ROOT, 'src')).filter(f => f.endsWith('.js') && f !== '12_ui.js').sort())
   vm.runInThisContext(fs.readFileSync(path.join(ROOT, 'src', f), 'utf8'), { filename: f });
 const JJ = global.J;
@@ -28,7 +31,7 @@ function tab(fn) {   // inDur / outDur (dur[, n]) -> table on a fixed grid (AE i
   return { n: NS, d: NS.map(n => DUR.map(d => r3(fn(d, n)))) };
 }
 const KEEP = ['w', 'tags', 'extra', 'wa', 'ae', 'portrait', 'emph', 'enterBias', 'busy', 'treat', 'cam', 'minDur', 'maxChars', 'safe', 'subtle', 'strong',
-  'layer', 'edge', 'mid', 'glitchy', 'dur', 'amp', 'pre', 'builtin', 'special', 'scratch', 'pack', 'set'];
+  'layer', 'edge', 'mid', 'glitchy', 'dur', 'amp', 'pre', 'builtin', 'special', 'scratch', 'pack', 'set', 'x2'];
 const meta = {}, orders = {}, names = {};
 for (const g of JJ.GROUP_KEYS) {
   meta[g] = {}; names[g] = {}; orders[g] = JJ.order(g).slice();

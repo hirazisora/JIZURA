@@ -42,9 +42,10 @@ J.mediaCameraState = (cut, p, w, h) => {
   const id = J.MEDIA_TECH[cut.hold]?.camera, def = id && J.CAMERA[id];
   if (!def) return null;
   const c = cameraCut(cut, id), t = c.start + J.clamp(p, 0, 1) * c.dur, beats = cut.songBeats || [];
-  // fx.motion .8 gives the cameras their standard strength; Motion intensity scales it in paint.
+  // fx.motion .8 gives the cameras their standard strength; Motion intensity scales it in paint. No song loudness here:
+  // energy is left unset so a loudness-driven camera (追加分2 音量で寄る) falls back to its own motion instead of standing still.
   const env = { cut: c, t, lt: t - c.start, ltb: t - c.start, step: Math.floor(t * 24 + 1e-6), W: w, H: h, fx: { motion: .8 },
-    beat: beats.length ? beatAt(beats, t) : null, plan: { beats }, energy: .5, scale: 1, allowFilter: true, pass: 'main' };
+    beat: beats.length ? beatAt(beats, t) : null, plan: { beats }, energy: null, scale: 1, allowFilter: true, pass: 'main' };
   let cam = null;
   try { cam = def.get(env, c.P); } catch { cam = null; }
   cam = cam || {};

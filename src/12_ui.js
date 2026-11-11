@@ -1345,7 +1345,7 @@ function openCutDetails(layer,index,part=0) {
         for(const button of modes)button.setAttribute('aria-pressed',String(button.dataset.fontPreviewMode===detailFontPreviewMode));
         for(const option of select.options){
           const parent=option.parentElement,groupName=parent.tagName==='OPTGROUP'?parent.label:'';
-          if(option.disabled||parent.disabled||!matches(option.textContent+' '+option.value+' '+groupName))continue;
+          if(option.disabled||parent.disabled||!matches(option.textContent+' '+option.value+' '+groupName+' '+J.detailSearchAlt(option.value)))continue;
           if(groupName&&group!==groupName){const heading=document.createElement('div');heading.className='detail-search-group';heading.textContent=groupName;list.append(heading);}group=groupName;
           const item=document.createElement('div');item.setAttribute('role','option');item.id='cutDetailSearchOption'+items.length;item.textContent=option.textContent;
           if(fontMenu&&J.FONTS[option.value]){
@@ -3294,7 +3294,7 @@ function renderTech() {
   let total = 0, onAll = 0;
   GROUPS.forEach(([g, label]) => {
     const tbl = J.registry(g), items = techItems(g), en = S.project.enabled[g] || (S.project.enabled[g] = {});
-    const shown = items.filter(k => matches(tbl[k].name+' '+k));
+    const shown = items.filter(k => matches(tbl[k].name+' '+k+' '+J.detailSearchAlt(k)));
     const onN = items.filter(k => en[k] !== false).length;
     total += items.length; onAll += onN;
     if (q && !shown.length) return;
