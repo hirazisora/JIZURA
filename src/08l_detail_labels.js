@@ -503,6 +503,193 @@ L|長さの補助値|Length factor
 N|個数の補助値|Count factor
 R|半径の補助値|Radius factor
 S|倍率の補助値|Scale factor
+dr|鍵穴の大きさ|Keyhole size
+pass|通り過ぎる影|Passing shadow
+door|扉|Door
+open|開き具合|Openness
+wr|違う行の位置|Odd line position
+kind|種類|Kind
+gi|違う字の位置|Odd glyph position
+n0|最初の階|Start floor
+stop|止まる位置|Stop point
+lag|遅れ|Lag
+rip|波紋の強さ|Ripple strength
+odd|食い違い|Mismatch
+drip|しずくの量|Drips
+hh|時|Hours
+mm|分|Minutes
+z0|雑音の開始位置|Noise start
+zw|雑音の幅|Noise width
+gl|ちらつき|Glitch amount
+moths|虫の数|Moths
+rotA|上片の傾き|Upper piece tilt
+rotB|下片の傾き|Lower piece tilt
+knob|取っ手|Door knob
+duty|隙間の比率|Gap ratio
+ss|秒|Seconds
+stick|針の引っかかり|Hand sticking
+roman|ローマ数字|Roman numerals
+climb|上る向き|Climbing
+hot|強調の位置|Highlighted item
+rollers|ローラー|Rollers
+rod|棒|Rod
+mag|拡大率|Magnification
+riser|蹴込み板|Risers
+crease|折り目|Crease
+sag|たわみ|Sag
+clip|洗濯ばさみ|Clips
+deep|奥行きの深さ|Depth amount
+how|入り方|Entry style
+al|揃え|Alignment
+steps|段数|Steps
+cyc|繰り返し回数|Cycles
+hl|強調の形|Highlight style
+pre|前の行数|Rows before
+post|後の行数|Rows after
+h0|開始の時|Start hour
+m0|開始の分|Start minute
+nT|見出しの数|Tab count
+foot|脚注|Footer
+tick|目盛り|Tick marks
+hd|見出しの色|Header colour
+full|全面|Full width
+chk|チェック|Check mark
+code|記号|Code
+strike|消し方|Strike style
+pg|ページ番号|Page number
+ln|行番号|Line number
+arrow|矢印|Arrow
+pic|図の種類|Picture type
+tr|字間|Tracking
+stub|半券の種類|Stub type
+cite|出典|Citation
+scn|場面番号|Scene number
+io|屋内・屋外|Interior / exterior
+time|時間帯|Time of day
+vo|声の種類|Voice type
+trans|場面転換|Transition label
+s1|第一の数値|First value
+nb|帯の数|Band count
+ring|輪|Ring
+shift|ずれ|Shift
+fontS|補助の書体|Secondary font
+sides|辺の数|Sides
+hy|横の分割|Horizontal split
+fills|塗りの数|Filled cells
+ya|縦の分割位置|Vertical split position
+xa|横の分割位置|Horizontal split position
+mir|反転|Mirror
+stag|ずらし|Stagger
+ord|順番|Order
+sz|大きさ|Size
+circ|円|Circle
+fh|横の反転|Flip horizontally
+fv|縦の反転|Flip vertically
+spiral|渦巻き|Spiral
+hub|中心の軸|Hub
+qx|横の象限|Horizontal quadrant
+qy|縦の象限|Vertical quadrant
+pulse|脈動|Pulse
+trend|傾向|Trend
+area|塗り|Area fill
+drop|下降|Drop
+rest|残りの割合|Remainder
+ex|切り出す扇|Exploded slice
+hole|中の穴|Hole
+orb|円の枠|Circle frame
+tabs|タブの数|Tab count
+ctl|ボタンの種類|Window controls
+card|カード|Card
+bw|枠の太さ|Border width
+px|ピンの位置|Pin position
+la|緯度|Latitude
+sheets|紙の枚数|Sheets
+s2|第二の数値|Second value
+legs|脚|Legs
+sky|天気|Weather
+cells|目盛りの数|Cells
+bolt|稲妻|Bolt
+icon|アイコン|Icon
+who|発信者|Caller
+max|最大値|Maximum
+sv|強調する列|Highlighted column
+data|データの量|Data amount
+steam|湯気の数|Steam wisps
+neck|襟の形|Neckline
+hang|ハンガー|Hanger
+ul|下線の形|Underline style
+doodle|落書き|Doodle
+check|チェック|Check mark
+ui|画面の種類|Screen type
+ruled|罫線|Ruled lines
+arcs|音の弧の数|Sound arcs
+pull|開く引き出し|Open drawer
+votes|票数|Votes
+ns|縞の数|Stripes
+turns|巻き数|Turns
+rungs|横木|Rungs
+star|星の形|Star shape
+pv|回転の軸|Pivot
+arrows|矢印|Arrows
+road|道の色|Road colour
+play|演奏|Playing
+stems|符の棒|Note stems
+sig|拍子記号|Time signature
+ov|重なりの量|Overlap
+move|移動|Movement
+un|未読部分の表示|Unsung style
+clock|時計|Clock
+blink|点滅|Blink
+wl|波長|Wavelength
+bits|ビット表示|Bits
+marker|目印|Marker
+streaks|筋|Streaks
+ground|地面|Ground
+total|全体の量|Total
+sync|揃い方|Sync
+cross|十字|Cross
+lead|行間|Leading
+ext|延長線|Extension lines
+other|もう一方の形|Other style
+jp|和文の扱い|Japanese setting
+axis|軸|Axis
+tall|縦長|Tall
+block|塊の色|Block colour
+em|全角枠|Em box
+base|基線の色|Baseline colour
+multi|複数|Multiple
+bars|骨の数|Bars
+pat|柄|Pattern
+tiers|段数|Tiers
+cord|紐の色|Cord colour
+hasRed|赤字|Red lettering
+stars|星|Stars
+knot|結び方|Knot
+strands|水引の本数|Strands
+ribs|骨の本数|Ribs
+tassel|房|Tassel
+sk|傾き|Slant
+reg|トンボ|Registration marks
+bow|反り|Bow
+one|一枚|Single sheet
+left|左側|Left side
+mid|中央|Middle
+ar|縦横比|Aspect ratio
+flipY|上下反転|Flip vertically
+horiz|横向き|Horizontal
+ab|周波数比|Frequency ratio
+keep|残す数|Kept
+birds|鳥の数|Birds
+x1|第一の位置|First position
+x2|第二の位置|Second position
+ball|玉|Ball
+nA|歯の数|Teeth
+what|表示の種類|Display kind
+fps|コマ数|Frames per second
+ax|軸|Axis
+sg|向き|Direction
+cw|回転の向き|Rotation direction
+inw|内向き|Inward
 ` .trim().split('\n')){const [key,ja,en]=line.split('|');names[key]=[ja,en];}
 J.detailFieldNames=names;
 J.detailFieldLabel=key=>{
