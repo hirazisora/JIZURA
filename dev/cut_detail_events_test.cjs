@@ -40,7 +40,7 @@ for(const locale of ['', 'en/']){
  await dialog.locator('button[type=submit]').click();
  assert.equal(await page.evaluate(()=>J.ui.plan.events.some(e=>e.cutOwner===target.owner&&e.type==='anamorphic')),false);
  assert.equal(await page.evaluate(()=>window.flareDraws()),0,'renderer no longer draws the flare');
- assert.equal(await page.evaluate(()=>JSON.stringify(J.ui.plan.events.filter(e=>e.cutOwner!==target.owner))),await page.evaluate(()=>window.otherBaseline),'other cuts retain effects');
+ assert.deepEqual(await page.evaluate(()=>J.ui.plan.events.filter(e=>e.cutOwner!==target.owner)),JSON.parse(await page.evaluate(()=>window.otherBaseline)),'other cuts retain effects');
  const saved=await page.evaluate(()=>JSON.stringify(J.ui.project));
  await page.evaluate(saved=>{J.ui.project=JSON.parse(saved);J.uiApi.syncUI();J.uiApi.replan()},saved);
  assert.equal(await page.evaluate(()=>J.ui.plan.events.some(e=>e.cutOwner===target.owner&&e.type==='anamorphic')),false,'saved project keeps removal');

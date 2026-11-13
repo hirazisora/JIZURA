@@ -112,10 +112,16 @@ J.mediaTechnique = (project, ov, rng, layer = 'media') => {
 };
 J.mediaTechniqueName = cut => cut.technique === 'legacy' ? label('従来の設定', 'Legacy settings') : J.MEDIA_TECH[cut.technique]?.name || label('演出無し', 'No effects');
 
+// A shallow copy of a planned cut that keeps its hidden decoration stage (see 08g_media_decor).
+J.copyMediaCut = (cut, changes) => {
+  const copy = {...cut, ...changes};
+  if (cut.decorStage) Object.defineProperty(copy, 'decorStage', { value: cut.decorStage, configurable: true, writable: true });
+  return copy;
+};
 J.paintMediaEffect = (ctx, source, fit, cut, p, fade, out) => {
   const customCut=cut;cut=J.resolveCustomMediaCut?.(cut)||cut;
   // Also synchronize old projects and manually selected legacy hold names.
-  if (J.mediaBpmHoldAliases?.[cut.hold]) cut = {...cut, hold:J.mediaBpmHoldAliases[cut.hold]};
+  if (J.mediaBpmHoldAliases?.[cut.hold]) cut = J.copyMediaCut(cut, {hold:J.mediaBpmHoldAliases[cut.hold]});
   const settings = cut.effectSettings || {}, amount = settings.motion ?? 1, treatment = settings.treatment ?? 1;
   const w = fit[0], h = fit[1], tau = Math.PI * 2, t = p * tau;
   let x = 0, y = 0, rotation = 0, scale = 1, sx = 1, sy = 1, alpha = 1, blur = 0, skew = 0;

@@ -16,11 +16,11 @@ try{for(const lang of ['','en/']){
    for(const [layer,id,color] of [['foreground','fg','#e33'],['media','bg','#33e']]){const c=document.createElement('canvas');c.width=400;c.height=300;const g=c.getContext('2d');g.fillStyle=color;g.fillRect(0,0,400,300);J.mediaAssets.set(id,{element:c,type:'image'});
     P[layer]={...P[layer],items:[{id,name:id+'.png',type:'image',width:400,height:300}],manualCuts:true,cutCount:5,timing:{lineTimes:{0:1,1:5,2:9,3:13,4:17}},cutOverrides:Object.fromEntries([0,1,2,3,4].map(i=>[i,{itemId:id,technique:null}]))};}
    J.uiApi.syncUI();J.uiApi.replan();J.uiApi.pause();J.uiApi.seek(10);});
-  await p.waitForTimeout(200);
+  await p.waitForTimeout(200);await p.locator('#showItemFrames').check();
   for(const layer of ['lyrics','foreground','media']){await p.locator(`.item-frame-action[data-action="lock"][data-layer="${layer}"]`).first().click();await p.waitForTimeout(100);}
   // The locked cuts, found by content rather than index (inserting shifts indices).
   const sig=()=>p.evaluate(LOCKED=>{const P=J.ui.plan,drop=new Set(['index','start','end','dur','displayEnd','words','line','group','text','lineText','sourceItemId','songBeats','placementMode','areaMode','groupExit','groupOutDur']);
-   const clean=c=>JSON.stringify(Object.fromEntries(Object.entries(c).filter(([k])=>!drop.has(k)).sort()));
+   const clean=c=>JSON.stringify(Object.fromEntries(Object.entries({...c,...(Number.isInteger(c.part)?{effectStyle:c.effectStyle||P.style,effectFx:c.effectFx||P.fx}:{})}).filter(([k])=>!drop.has(k)).sort()));
    const line=P.lines.find(l=>l.text===LOCKED);
    const media=l=>{const c=P[l].cuts.find(c=>J.ui.project[l].cutOverrides[c.index]?.lock);return c?clean(c):null;};
    return {lyric:P.cuts.filter(c=>c.line===line?.index&&Number.isInteger(c.part)).map(clean),lyricLocked:!!J.ui.project.overrides[line?.index]?.lock,
@@ -28,12 +28,14 @@ try{for(const lang of ['','en/']){
   const before=await sig();
   await op(p);await p.waitForTimeout(300);
   const after=await sig();
-  const changed=(a,b)=>{const A=JSON.parse(a||'{}'),B=JSON.parse(b||'{}');return Object.keys({...A,...B}).filter(k=>JSON.stringify(A[k])!==JSON.stringify(B[k]));};
+  // Style settings the locked look did not have yet (new style keys) fall back to the current style.
+  const same=(k,x,y)=>['effectStyle','effectFx'].includes(k)&&x&&y?Object.keys(x).every(s=>JSON.stringify(x[s])===JSON.stringify(y[s])):JSON.stringify(x)===JSON.stringify(y);
+  const changed=(a,b)=>{const A=JSON.parse(a||'{}'),B=JSON.parse(b||'{}');return Object.keys({...A,...B}).filter(k=>!same(k,A[k],B[k]));};
   const lyricChanged=before.lyric.length!==after.lyric.length?['parts']:[...new Set(before.lyric.flatMap((x,i)=>changed(x,after.lyric[i])))];
   check(after.lyricLocked&&after.fgLocked&&after.bgLocked,`${name}: still locked`);
   expect({lyric:lyricChanged,fg:changed(before.fg,after.fg),bg:changed(before.bg,after.bg)},(ok,m)=>check(ok,`${name}: ${m}`));
   check(!errors.length,`${name}: page errors ${errors}`);await p.close();};
- const seekAnd=async(p,t)=>{await p.evaluate(t=>{J.uiApi.pause();J.uiApi.seek(t);},t);await p.waitForTimeout(120);};
+ const seekAnd=async(p,t)=>{await p.locator('#showItemFrames').check();await p.evaluate(t=>{J.uiApi.pause();J.uiApi.seek(t);},t);await p.waitForTimeout(120);};
  const unchanged=(c,ok)=>{ok(!c.lyric.length,'lyric changed: '+c.lyric);ok(!c.fg.length,'foreground changed: '+c.fg);ok(!c.bg.length,'background changed: '+c.bg);};
  // Indirect changes: nothing moves.
  await scenario('resize another lyric area',p=>p.evaluate(()=>{J.ui.project.overrides[1]={...J.ui.project.overrides[1],area:{x:.1,y:.1,w:.4,h:.3,angle:0,lockAspect:true}};J.uiApi.replan();}),unchanged);
@@ -52,7 +54,7 @@ try{for(const lang of ['','en/']){
   await p.locator('#areaApplyOne').click();},(c,ok)=>{ok(c.lyric.includes('area'),'area applied');ok(c.lyric.every(k=>['area','params'].includes(k)),'only the area changed: '+c.lyric);});
  await scenario('re-roll the locked cuts',async p=>{await seekAnd(p,10);for(const l of ['lyrics','foreground'])await p.locator(`.item-frame-action[data-action="dice"][data-layer="${l}"]`).first().click();},
   (c,ok)=>{ok(c.lyric.includes('seed'),'lyric re-rolled');ok(c.fg.includes('seed'),'foreground re-rolled');ok(!c.lyric.includes('area')&&!c.fg.includes('placement'),'place kept');});
- await scenario('edit the locked lyric in details',async p=>{await seekAnd(p,10);await p.locator('.item-frame-action[data-action="details"][data-layer="lyrics"]').first().click();await p.waitForTimeout(300);
+ await scenario('edit the locked lyric in details',async p=>{await seekAnd(p,10);await p.locator('.item-frame-action[data-action="details"][data-layer="lyrics"]').first().click();await p.waitForTimeout(300);await p.locator('#cutDetailsDialog [data-detail-tab="motion"]').click();
   await p.evaluate(()=>{const d=document.getElementById('cutDetailsDialog');for(const s of d.querySelectorAll('select')){if(s.dataset.maskMotion||!s.offsetParent)continue;const box=s.closest('div,label,section');if(box&&/^(登場|Entrance)/.test(box.textContent.trim())){s.value=[...s.options].map(o=>o.value).find(v=>v&&v!==s.value);s.dispatchEvent(new Event('change',{bubbles:true}));break;}}});
   await p.waitForTimeout(200);await p.locator('#cutDetailsDialog button[type=submit]').click();},(c,ok)=>{ok(c.lyric.length===1&&c.lyric[0]==='enter','only the entrance changed: '+c.lyric);});
  await scenario('move the locked foreground',p=>p.evaluate(()=>{const o=J.ui.project.foreground.cutOverrides[2];o.placement={cx:.25,cy:.25,w:.3,h:.225,lockAspect:true,angle:0};J.uiApi.replan();}),(c,ok)=>{ok(c.fg.length===1&&c.fg[0]==='placement','only the placement changed: '+c.fg);});

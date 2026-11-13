@@ -73,7 +73,9 @@ const assert = require('node:assert/strict');
         await page.locator(`#${layer}EffectsPanel [data-media-action="shuffle"]`).click();assert.deepEqual(await current(),locked);
         await page.locator('#mediaLineList .lock').click();
         await page.locator('.foreground-placement-open').click();
-        const box=await page.locator('#areaEditRect').boundingBox();
+        const rect=await page.locator('#areaEditRect').boundingBox(),view=await page.locator('#view').boundingBox();
+        // A portrait image covering the frame reaches far outside the preview: drag from its visible part.
+        const box={x:Math.max(rect.x,view.x),y:Math.max(rect.y,view.y)};box.width=Math.min(rect.x+rect.width,view.x+view.width)-box.x;box.height=Math.min(rect.y+rect.height,view.y+view.height)-box.y;
         await page.mouse.move(box.x+box.width/2,box.y+box.height/2);await page.mouse.down();await page.mouse.move(box.x+box.width/2+25,box.y+box.height/2+10,{steps:5});await page.mouse.up();
         await page.locator('#areaApplyOne').click();const manual=await current();
         assert.equal(await page.evaluate(layer=>J.ui.plan[layer].cuts[0].placementMode,layer),'manual');

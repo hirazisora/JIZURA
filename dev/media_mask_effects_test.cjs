@@ -48,7 +48,7 @@ assert.ok(preview.includes('maskRings'),'preview plan uses the mask: '+preview);
 const themedOmakase=await page.evaluate(()=>{const P={...J.ui.project,themes:['ballad']};let bg=0,fg=0;for(let i=0;i<10;i++){const look=J.omakase(P,J.rng(i+7));bg+=J.MEDIA_MASK_KEYS.filter(k=>look.media.effects.enabled[k]).length;fg+=J.MEDIA_MASK_KEYS.filter(k=>look.foreground.effects.enabled[k]).length;}return {bg,fg};});
 assert.ok(themedOmakase.bg>0,'themed おまかせ enables background masks');assert.equal(themedOmakase.fg,0);
 // Fuzzy search in the cut details finds them by category, synonym or English name.
-await timelineAction(page,'[data-layer="media"]','details');await page.locator('#cutDetailsDialog [data-detail-field="technique"]').click();
+await timelineAction(page,'[data-layer="media"]','details');await page.locator('#cutDetailsDialog [data-detail-tab="motion"]').click();await page.locator('#cutDetailsDialog [data-detail-field="technique"]').click();
 const search=page.locator('.detail-search-popup input'),found=async query=>{await search.fill(query);return page.locator('.detail-search-option').evaluateAll(els=>els.map(e=>e.dataset.value));};
 const byCategory=await found(locale?'mask':'マスク');assert.ok(keys.every(k=>byCategory.includes(k)),'category search: '+byCategory);
 for(const [query,key] of [['レターボックス','maskCinemascope'],['letterbox','maskCinemascope'],['多重露光','maskDoubleExposure'],['視差','maskSlashParallax'],['shutter','maskShutterBeat'],['ウィンドウ','maskBeatWindows'],['rings','maskRings']])assert.ok((await found(query)).includes(key),query+' finds '+key);

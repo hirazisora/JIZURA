@@ -9,7 +9,11 @@ const decorParams = (rng, k) => ({ id: k, seed: rng.int(1, 1e9), n: rng.int(1, 3
 // random rules (追加分, 和風, part sets). Unset checks default to front decorations only, since
 // back ones sit under the source and vanish behind opaque images.
 J.mediaDecorOn = (settings, k) => settings?.decorEnabled?.[k] ?? J.DECOR[k]?.layer === 'front';
-J.mediaDecorCandidates = (project, layer = 'media') => { const settings = J.mediaEffectSettings(project, layer); return J.order('decor').filter(k => J.DECOR[k] && J.mediaDecorOn(settings, k) && (!J.randomOk || J.randomOk(project, 'decor', k))); };
+// Decorations that read the lyric text or look for free space beside the lyric draw nothing on a
+// media frame (the frame is their whole box), so they are never picked for media cuts.
+// dev/media_decor_test.cjs checks that every other front decoration draws.
+J.MEDIA_DECOR_SKIP = new Set(["waveLine","speedCorner","twinkle","crossOut","heartsStars","verticalStrip","romajiLine","seal","hanabi","chochin","shimenawa","momiji","namiGashira","sonarArcs","circuit","punchHoles","indexTabs","vines","cloudPuffs","fireflies","memphis","decoCorners","musicNotes","hrStaticPatch","hrCracks","tyColophon","tyRunningHead","tyTextRule","tyTypeScale","xlWingLines","xlProtractor","xmSettle","xmSwarm","xmBounce","xmPendulum","xmDominoes","xmPong","xmConveyor","xmStairs","xmIsoCubes","xmSlide","xmGears","xmSortBars","xmPie","xmScatter","xmBeatSteps","xmGauge","xnSyllables","xnGlyphStats","xnVowels","xnLegend","xnAxes","hzPairEyes","hzStrayGlyph","hzHandprints","hzDoorAjar","hzFilmDirt","kzImpactTicks","kzWhooshCurls","kzWobbleArcs","kzMetronome","kzSpringCoils","kzPushRods","tzNoteMark","tzProgRule","tzTrackMarks","tzSideCaption","tzHeadEnd","tzNumStrip","tzDotLeader","tzCornerNums","tzReadCaret","wzShippo","wzYagasuri","wzUroko","wzMizuhiki","wzChidori","wzUme","wzKazaguruma"]);
+J.mediaDecorCandidates = (project, layer = 'media') => { const settings = J.mediaEffectSettings(project, layer); return J.order('decor').filter(k => J.DECOR[k] && !J.MEDIA_DECOR_SKIP.has(k) && J.mediaDecorOn(settings, k) && (!J.randomOk || J.randomOk(project, 'decor', k))); };
 J.pickMediaDecor = (project, cut, style, fx, layer = 'media') => {
   const rng = J.rng(J.h(cut.seed, 947)), cands = J.mediaDecorCandidates(project, layer).map(k => [k, (style?.decor?.[k] ?? 1) * (J.DECOR[k].w != null ? J.DECOR[k].w * .5 : .35)]).filter(([, w]) => w > 0);
   // One or two, more often two when the lyric decor slider is high.

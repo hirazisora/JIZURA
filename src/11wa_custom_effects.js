@@ -145,7 +145,7 @@ J.customMediaMotion=(cut,p,fade,out,W,H)=>{
   return result;
 };
 J.resolveCustomMediaCut=cut=>{
-  const c={...cut};for(const field of ['enter','exit']){const d=J.MEDIA_TECH[c[field]]?.customDefinition;if(d)c[field]=J.MEDIA_TECH[d.base]?.motion||'cut';}return c;
+  const c=J.copyMediaCut(cut);for(const field of ['enter','exit']){const d=J.MEDIA_TECH[c[field]]?.customDefinition;if(d)c[field]=J.MEDIA_TECH[d.base]?.motion||'cut';}return c;
 };
 J.drawCustomMedia=(ctx,source,fit,cut,p,fade,out)=>{
   for(const [field,progress,param] of [['technique',p,'techniqueP'],['enter',fade,'entranceP'],['exit',out,'departureP']]){

@@ -1807,9 +1807,11 @@ function openTimelineCutMenu(trigger) {
     return `<button type="button" role="${toggle?'menuitemcheckbox':'menuitem'}" ${toggle?`aria-checked="${active}"`:''} data-action="${action}" data-layer="${layer}" data-index="${index}" data-part="${part}">${ICON[action]}<span>${labels[action]}</span>${active?'<span class="menu-check" aria-hidden="true">✓</span>':''}</button>`;
   }).join('');
   document.body.append(menu);timelineCutMenu={menu,controller,trigger};trigger.setAttribute('aria-expanded','true');
-  const r=trigger.getBoundingClientRect(),box=menu.getBoundingClientRect();
-  menu.style.left=Math.max(8,Math.min(r.left,innerWidth-box.width-8))+'px';
-  menu.style.top=Math.max(8,Math.min(r.bottom+4,innerHeight-box.height-8))+'px';
+  const place=()=>{const r=trigger.getBoundingClientRect(),box=menu.getBoundingClientRect();
+    menu.style.left=Math.max(8,Math.min(r.left,innerWidth-box.width-8))+'px';
+    menu.style.top=Math.max(8,Math.min(r.bottom+4,innerHeight-box.height-8))+'px';
+    return r.bottom>0&&r.top<innerHeight&&r.right>0&&r.left<innerWidth;};
+  place();
   menu.addEventListener('click',e=>{const button=e.target.closest('button');if(!button)return;e.stopPropagation();closeTimelineCutMenu();if(!S.exporting&&!S.tap)performTimelineAction(button);},{signal});
   menu.addEventListener('keydown',e=>{
     e.stopPropagation();
@@ -1820,7 +1822,7 @@ function openTimelineCutMenu(trigger) {
   },{signal});
   document.addEventListener('pointerdown',e=>{if(!menu.contains(e.target)&&!trigger.contains(e.target))closeTimelineCutMenu();},{capture:true,signal});
   window.addEventListener('resize',()=>closeTimelineCutMenu(),{signal});
-  document.addEventListener('scroll',e=>{if(!menu.contains(e.target))closeTimelineCutMenu();},{capture:true,signal});
+  document.addEventListener('scroll',e=>{if(!menu.contains(e.target)&&!place())closeTimelineCutMenu();},{capture:true,signal});
   menu.querySelector('button').focus();
 }
 function performTimelineAction(control) {

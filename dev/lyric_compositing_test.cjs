@@ -146,7 +146,7 @@ const assert = require('node:assert/strict');
       assert.equal((await cuts())[0].opacity,48,'manual opacity survives shuffle');
       assert.equal((await cuts())[0].blend,'overlay','manual blend survives shuffle');
       await first.locator('.lyric-composite-auto').click();
-      assert.equal((await project()).lyricCutOptions['0:0'],undefined);
+      {const {autoEffects,...rest}=(await project()).lyricCutOptions['0:0']||{};assert.deepEqual(rest,{},'auto composite clears manual settings');}
       assert.equal(await first.locator('.lyric-cut-blend').inputValue(),'');
       await page.locator('#lineList .lock').first().click();
       const locked=(await cuts()).filter(c=>c.line===0);

@@ -23,7 +23,7 @@ function stableDetails(project,layer,cut,options,locked){
   for(const [field,param] of Object.entries(effectParams))if(Object.hasOwn(explicit,field)&&explicit[field]!==result[field])delete result[param];
   if(layer==='lyrics'){
     const override=project.overrides?.[cut.line]||{};
-    for(const [field,param] of Object.entries(effectParams))if(override[field]&&override[field]!==result[field]){result[field]=override[field];delete result[param];}
+    for(const [field,param] of Object.entries(effectParams))if(override[field]&&override[field]!==result[field]&&J.registry(field)?.[override[field]]){result[field]=override[field];delete result[param];}
     if(Array.isArray(override.decor))result.decor=copyEffects(cut.decor);
   }else{
     const override={...project[layer]?.overrides?.[cut.itemId],...options};

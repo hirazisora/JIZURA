@@ -416,7 +416,8 @@ const seekMediaVideo = async (v, target, signal, name = '') => {
     const finish = () => {done=true;clearTimeout(timer);clearTimeout(wakeTimer);clearInterval(poll);v.pause();v.removeEventListener('seeked',ok);v.removeEventListener('loadeddata',ok);v.removeEventListener('canplay',ok);v.removeEventListener('error',fail);if(signal)signal.removeEventListener('abort',abort);};
     // Mobile decoders may need playback through the rewind too. Pause only
     // after the requested frame is available, otherwise the seek can stall.
-    const ok = () => {if(done||v.readyState<2||v.seeking)return;if(Math.abs(v.currentTime-target)>.02){v.currentTime=target;return;}finish();resolve();};
+    // A seek into the last frame may settle at the very end (showing that frame); re-seeking would loop.
+    const ok = () => {if(done||v.readyState<2||v.seeking)return;const atEnd=v.duration-v.currentTime<.002&&v.duration-target<.5;if(Math.abs(v.currentTime-target)>.02&&!atEnd){v.currentTime=target;return;}finish();resolve();};
     const fail = () => {if(done)return;finish();reject(new Error(J.mediaLabel('動画の再生位置を準備できませんでした','Could not prepare video playback position') + (name ? '：' + name : '') + ` (${target.toFixed(3)}s; readyState=${v.readyState}; mediaError=${v.error?.code || 0})`));};
     const abort = () => {if(done)return;finish();reject(new Error('Cancelled'));};
     const timer=setTimeout(fail,15000);

@@ -5881,7 +5881,8 @@ const seekMediaVideo = async (v, target, signal, name = '') => {
     const finish = () => {done=true;clearTimeout(timer);clearTimeout(wakeTimer);clearInterval(poll);v.pause();v.removeEventListener('seeked',ok);v.removeEventListener('loadeddata',ok);v.removeEventListener('canplay',ok);v.removeEventListener('error',fail);if(signal)signal.removeEventListener('abort',abort);};
     // Mobile decoders may need playback through the rewind too. Pause only
     // after the requested frame is available, otherwise the seek can stall.
-    const ok = () => {if(done||v.readyState<2||v.seeking)return;if(Math.abs(v.currentTime-target)>.02){v.currentTime=target;return;}finish();resolve();};
+    // A seek into the last frame may settle at the very end (showing that frame); re-seeking would loop.
+    const ok = () => {if(done||v.readyState<2||v.seeking)return;const atEnd=v.duration-v.currentTime<.002&&v.duration-target<.5;if(Math.abs(v.currentTime-target)>.02&&!atEnd){v.currentTime=target;return;}finish();resolve();};
     const fail = () => {if(done)return;finish();reject(new Error(J.mediaLabel('動画の再生位置を準備できませんでした','Could not prepare video playback position') + (name ? '：' + name : '') + ` (${target.toFixed(3)}s; readyState=${v.readyState}; mediaError=${v.error?.code || 0})`));};
     const abort = () => {if(done)return;finish();reject(new Error('Cancelled'));};
     const timer=setTimeout(fail,15000);
@@ -6701,10 +6702,16 @@ J.mediaTechnique = (project, ov, rng, layer = 'media') => {
 };
 J.mediaTechniqueName = cut => cut.technique === 'legacy' ? label('従来の設定', 'Legacy settings') : J.MEDIA_TECH[cut.technique]?.name || label('演出無し', 'No effects');
 
+// A shallow copy of a planned cut that keeps its hidden decoration stage (see 08g_media_decor).
+J.copyMediaCut = (cut, changes) => {
+  const copy = {...cut, ...changes};
+  if (cut.decorStage) Object.defineProperty(copy, 'decorStage', { value: cut.decorStage, configurable: true, writable: true });
+  return copy;
+};
 J.paintMediaEffect = (ctx, source, fit, cut, p, fade, out) => {
   const customCut=cut;cut=J.resolveCustomMediaCut?.(cut)||cut;
   // Also synchronize old projects and manually selected legacy hold names.
-  if (J.mediaBpmHoldAliases?.[cut.hold]) cut = {...cut, hold:J.mediaBpmHoldAliases[cut.hold]};
+  if (J.mediaBpmHoldAliases?.[cut.hold]) cut = J.copyMediaCut(cut, {hold:J.mediaBpmHoldAliases[cut.hold]});
   const settings = cut.effectSettings || {}, amount = settings.motion ?? 1, treatment = settings.treatment ?? 1;
   const w = fit[0], h = fit[1], tau = Math.PI * 2, t = p * tau;
   let x = 0, y = 0, rotation = 0, scale = 1, sx = 1, sy = 1, alpha = 1, blur = 0, skew = 0;
@@ -7496,7 +7503,11 @@ const decorParams = (rng, k) => ({ id: k, seed: rng.int(1, 1e9), n: rng.int(1, 3
 // random rules (追加分, 和風, part sets). Unset checks default to front decorations only, since
 // back ones sit under the source and vanish behind opaque images.
 J.mediaDecorOn = (settings, k) => settings?.decorEnabled?.[k] ?? J.DECOR[k]?.layer === 'front';
-J.mediaDecorCandidates = (project, layer = 'media') => { const settings = J.mediaEffectSettings(project, layer); return J.order('decor').filter(k => J.DECOR[k] && J.mediaDecorOn(settings, k) && (!J.randomOk || J.randomOk(project, 'decor', k))); };
+// Decorations that read the lyric text or look for free space beside the lyric draw nothing on a
+// media frame (the frame is their whole box), so they are never picked for media cuts.
+// dev/media_decor_test.cjs checks that every other front decoration draws.
+J.MEDIA_DECOR_SKIP = new Set(["waveLine","speedCorner","twinkle","crossOut","heartsStars","verticalStrip","romajiLine","seal","hanabi","chochin","shimenawa","momiji","namiGashira","sonarArcs","circuit","punchHoles","indexTabs","vines","cloudPuffs","fireflies","memphis","decoCorners","musicNotes","hrStaticPatch","hrCracks","tyColophon","tyRunningHead","tyTextRule","tyTypeScale","xlWingLines","xlProtractor","xmSettle","xmSwarm","xmBounce","xmPendulum","xmDominoes","xmPong","xmConveyor","xmStairs","xmIsoCubes","xmSlide","xmGears","xmSortBars","xmPie","xmScatter","xmBeatSteps","xmGauge","xnSyllables","xnGlyphStats","xnVowels","xnLegend","xnAxes","hzPairEyes","hzStrayGlyph","hzHandprints","hzDoorAjar","hzFilmDirt","kzImpactTicks","kzWhooshCurls","kzWobbleArcs","kzMetronome","kzSpringCoils","kzPushRods","tzNoteMark","tzProgRule","tzTrackMarks","tzSideCaption","tzHeadEnd","tzNumStrip","tzDotLeader","tzCornerNums","tzReadCaret","wzShippo","wzYagasuri","wzUroko","wzMizuhiki","wzChidori","wzUme","wzKazaguruma"]);
+J.mediaDecorCandidates = (project, layer = 'media') => { const settings = J.mediaEffectSettings(project, layer); return J.order('decor').filter(k => J.DECOR[k] && !J.MEDIA_DECOR_SKIP.has(k) && J.mediaDecorOn(settings, k) && (!J.randomOk || J.randomOk(project, 'decor', k))); };
 J.pickMediaDecor = (project, cut, style, fx, layer = 'media') => {
   const rng = J.rng(J.h(cut.seed, 947)), cands = J.mediaDecorCandidates(project, layer).map(k => [k, (style?.decor?.[k] ?? 1) * (J.DECOR[k].w != null ? J.DECOR[k].w * .5 : .35)]).filter(([, w]) => w > 0);
   // One or two, more often two when the lyric decor slider is high.
@@ -8222,7 +8233,7 @@ function stableDetails(project,layer,cut,options,locked){
   for(const [field,param] of Object.entries(effectParams))if(Object.hasOwn(explicit,field)&&explicit[field]!==result[field])delete result[param];
   if(layer==='lyrics'){
     const override=project.overrides?.[cut.line]||{};
-    for(const [field,param] of Object.entries(effectParams))if(override[field]&&override[field]!==result[field]){result[field]=override[field];delete result[param];}
+    for(const [field,param] of Object.entries(effectParams))if(override[field]&&override[field]!==result[field]&&J.registry(field)?.[override[field]]){result[field]=override[field];delete result[param];}
     if(Array.isArray(override.decor))result.decor=copyEffects(cut.decor);
   }else{
     const override={...project[layer]?.overrides?.[cut.itemId],...options};
@@ -64533,7 +64544,7 @@ J.customMediaMotion=(cut,p,fade,out,W,H)=>{
   return result;
 };
 J.resolveCustomMediaCut=cut=>{
-  const c={...cut};for(const field of ['enter','exit']){const d=J.MEDIA_TECH[c[field]]?.customDefinition;if(d)c[field]=J.MEDIA_TECH[d.base]?.motion||'cut';}return c;
+  const c=J.copyMediaCut(cut);for(const field of ['enter','exit']){const d=J.MEDIA_TECH[c[field]]?.customDefinition;if(d)c[field]=J.MEDIA_TECH[d.base]?.motion||'cut';}return c;
 };
 J.drawCustomMedia=(ctx,source,fit,cut,p,fade,out)=>{
   for(const [field,progress,param] of [['technique',p,'techniqueP'],['enter',fade,'entranceP'],['exit',out,'departureP']]){
@@ -66766,9 +66777,11 @@ function openTimelineCutMenu(trigger) {
     return `<button type="button" role="${toggle?'menuitemcheckbox':'menuitem'}" ${toggle?`aria-checked="${active}"`:''} data-action="${action}" data-layer="${layer}" data-index="${index}" data-part="${part}">${ICON[action]}<span>${labels[action]}</span>${active?'<span class="menu-check" aria-hidden="true">✓</span>':''}</button>`;
   }).join('');
   document.body.append(menu);timelineCutMenu={menu,controller,trigger};trigger.setAttribute('aria-expanded','true');
-  const r=trigger.getBoundingClientRect(),box=menu.getBoundingClientRect();
-  menu.style.left=Math.max(8,Math.min(r.left,innerWidth-box.width-8))+'px';
-  menu.style.top=Math.max(8,Math.min(r.bottom+4,innerHeight-box.height-8))+'px';
+  const place=()=>{const r=trigger.getBoundingClientRect(),box=menu.getBoundingClientRect();
+    menu.style.left=Math.max(8,Math.min(r.left,innerWidth-box.width-8))+'px';
+    menu.style.top=Math.max(8,Math.min(r.bottom+4,innerHeight-box.height-8))+'px';
+    return r.bottom>0&&r.top<innerHeight&&r.right>0&&r.left<innerWidth;};
+  place();
   menu.addEventListener('click',e=>{const button=e.target.closest('button');if(!button)return;e.stopPropagation();closeTimelineCutMenu();if(!S.exporting&&!S.tap)performTimelineAction(button);},{signal});
   menu.addEventListener('keydown',e=>{
     e.stopPropagation();
@@ -66779,7 +66792,7 @@ function openTimelineCutMenu(trigger) {
   },{signal});
   document.addEventListener('pointerdown',e=>{if(!menu.contains(e.target)&&!trigger.contains(e.target))closeTimelineCutMenu();},{capture:true,signal});
   window.addEventListener('resize',()=>closeTimelineCutMenu(),{signal});
-  document.addEventListener('scroll',e=>{if(!menu.contains(e.target))closeTimelineCutMenu();},{capture:true,signal});
+  document.addEventListener('scroll',e=>{if(!menu.contains(e.target)&&!place())closeTimelineCutMenu();},{capture:true,signal});
   menu.querySelector('button').focus();
 }
 function performTimelineAction(control) {

@@ -33,7 +33,7 @@ return {motion,empty,rawEdge,rawCenter,renderedEdge,renderedCenter,filtered,late
 });
 assert.equal(report.motion,true);assert.equal(report.empty,0);assert.deepEqual(report.rawEdge,[255,0,0,255]);assert.equal(report.renderedEdge[3],0);assert.ok(Math.abs(report.renderedCenter[3]-128)<=1);assert.equal(report.filtered[0],report.filtered[1]);assert.equal(report.filtered[1],report.filtered[2]);assert.deepEqual(report.later,[0,0,255,255]);assert.equal(report.lyricEqual,true);assert.equal(report.locked,'@copy:lyrics');assert.equal(report.roundtrip,'@copy:lyrics');
 await page.locator('#sourceMedia').click();const select=page.locator('.media-cut-file').first();assert.equal(await select.locator('option[value^="@copy:"]').count(),3);for(const value of ['@copy:foreground-source','@copy:foreground-render','@copy:lyrics']){await select.selectOption(value);assert.equal(await page.evaluate(()=>J.ui.plan.media.cuts[0].itemId),value);}
-await page.locator('#itemFrames .item-frame-name[data-select-layer="media"]').click();await page.locator('#areaCancel').click();await page.locator('#sourceForeground').click();assert.equal(await page.locator('.media-cut-file option[value^="@copy:"]').count(),0);assert.deepEqual(errors,[]);console.log(locale||'ja',report);await page.close();}
+await page.locator('#showItemFrames').check();await page.locator('#itemFrames .item-frame-name[data-select-layer="media"]').click();await page.locator('#areaCancel').click();await page.locator('#sourceForeground').click();assert.equal(await page.locator('.media-cut-file option[value^="@copy:"]').count(),0);assert.deepEqual(errors,[]);console.log(locale||'ja',report);await page.close();}
 }finally{await browser.close();}})().catch(e=>{console.error(e);process.exit(1)});
 
 

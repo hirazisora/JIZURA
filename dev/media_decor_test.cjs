@@ -42,11 +42,11 @@ const out=document.createElement('canvas');out.width=640;out.height=360;const ct
 const base=cuts(setup('media',[{technique:null}],true),'media')[0];
 const paint=(decor,p=.5)=>{const c={...base,hold:'still',treat:'none',enter:'cut',exit:'cut',decor};Object.defineProperty(c,'decorStage',{value:base.decorStage});ctx.setTransform(1,0,0,1,0,0);ctx.clearRect(0,0,640,360);ctx.translate(320,180);J.paintMediaEffect(ctx,src,[320,180],c,p,1,1);ctx.setTransform(1,0,0,1,0,0);return ctx.getImageData(0,0,640,360).data;};
 const plain=paint([]),inside=(d,x0=180,y0=100,x1=460,y1=260)=>{for(let y=y0;y<y1;y+=2)for(let x=x0;x<x1;x+=2){const i=(y*640+x)*4;if(Math.abs(d[i]-plain[i])+Math.abs(d[i+1]-plain[i+1])+Math.abs(d[i+2]-plain[i+2])>6)return true;}return false;};
-let drew=0,total=0;
+let drew=0,total=0;const drawn=new Set();
 for(const id of J.order('decor')){const D=J.DECOR[id];if(!D)continue;total++;const rng=J.rng(5);const params={id,seed:12345,n:3,right:true,low:false,accent:true,corner:true,big:true,mode:'count',from:1,to:99,v:2,r:.4};
  let any=false;for(const p of [.3,.5,.7]){const d=paint([params],p);if(d.some((v,i)=>v!==plain[i]))any=true;if(D.layer==='back'&&inside(d))failures.push('back decor over source '+id);}
- if(any)drew++;}
-check(drew>=total*.7,'decorations drawn '+drew+'/'+total);
+ if(any){drew++;drawn.add(id);}}
+const silent=J.mediaDecorCandidates(J.defaultProject(),'media').filter(id=>J.DECOR[id].layer==='front'&&!drawn.has(id));check(!silent.length,'media decorations that draw nothing '+silent.join(' '));check(drew>=total*.6,'decorations drawn '+drew+'/'+total);
 // Front decorations hug the frame edges, so look at the whole frame (160..480 × 90..270).
 check(J.order('decor').filter(id=>J.DECOR[id]?.layer==='front').some(id=>inside(paint([{id,seed:1,n:2,corner:true,big:true,accent:true}]),160,90,480,270)),'front decor over source');
 check(warnings.filter(w=>w.includes('media decor')).length===0,'decor warnings '+warnings.filter(w=>w.includes('media decor')).slice(0,3));
@@ -67,7 +67,10 @@ for(const layer of ['foreground','media']){
 }
 await page.evaluate(()=>{const p=J.ui.project;const img=document.createElement('canvas');img.width=160;img.height=90;J.mediaAssets.set('md',{element:img,type:'image'});p.media={...p.media,items:[{id:'md',name:'md.png',type:'image',width:160,height:90}],manualCuts:true,cutCount:1,timing:{lineTimes:{0:0}},cutOverrides:{0:{itemId:'md',technique:'kenBurns'}}};J.uiApi.syncUI();J.uiApi.replan();});
 await timelineAction(page,'[data-layer="media"]','details');
-const modal=page.locator('#cutDetailsDialog');const section=modal.locator('[data-detail-section="decor"]');await section.locator('summary').click();
+const modal=page.locator('#cutDetailsDialog');const section=modal.locator('[data-detail-section="decor"]');
+// Cut details are split into tabs: open the one that holds the decorations.
+const panel=await section.evaluate(e=>e.closest('.cut-details-tab-panel')?.id);if(panel)await modal.locator(`[role=tab][aria-controls="${panel}"]`).click();
+if(await section.evaluate(e=>e.tagName==='DETAILS'))await section.locator('summary').first().click();
 await section.getByRole('button',{name:lang?'Add decoration':'装飾を追加'}).click();
 await modal.getByRole('button',{name:lang?'Apply':'適用',exact:true}).click();
 const saved=await page.evaluate(()=>({details:J.ui.project.media.cutOverrides[0].details?.decor?.length,plan:J.ui.plan.media.cuts[0].decor.length}));

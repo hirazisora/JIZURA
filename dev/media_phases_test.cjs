@@ -33,7 +33,7 @@ const assert=require('node:assert/strict');
    await page.locator(`#${layer}EffectsPanel [data-media-action="disable"]`).click();
    await page.locator(`#${layer}EffectsPanel [data-media-action="shuffle"]`).click();
    assert.deepEqual(await page.evaluate(layer=>{const c=J.ui.plan[layer].cuts[0];return [c.entrance,c.departure]},layer),locked);
-   await page.locator('#mediaLineList .lock').click();
+   await page.locator('#mediaLineList .lock').click();await page.locator(`#${layer}EffectsPanel [data-media-action="shuffle"]`).click();
    assert.deepEqual(await page.evaluate(layer=>{const c=J.ui.plan[layer].cuts[0];return [c.enter,c.exit]},layer),['cut','cut']);
    await page.locator(`#${layer}EffectsPanel [data-media-action="enable"]`).click();
    await enter.selectOption('enter_flipY');await exit.selectOption('exit_squeezeX');
