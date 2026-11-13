@@ -1037,8 +1037,8 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 
     <!-- ================= center: stage ================= -->
     <section class="col col-stage" aria-label="Preview">
-      <div class="viewport" id="viewport"><button id="exitPreviewFullscreen" class="fullscreen-exit" type="button">Exit fullscreen</button><div class="fullscreen-transport"><button id="fullscreenPlay" type="button" aria-label="Play">▶</button><span id="fullscreenTime" class="tc"></span><input id="fullscreenScrub" type="range" min="0" max="10000" value="0" aria-label="Playback position"></div><canvas id="view" width="1280" height="720"></canvas><div id="itemFrames" class="item-frames"></div><div id="areaEditOverlay" class="area-edit-overlay" aria-label="Edit position and size" hidden><div id="areaEditRect" class="area-edit-rect"><span class="area-edit-handle nw" data-handle="nw"></span><span class="area-edit-handle ne" data-handle="ne"></span><span class="area-edit-handle sw" data-handle="sw"></span><span class="area-edit-handle se" data-handle="se"></span><span class="area-rotate-handle n" data-handle="rotate" role="button" aria-label="回転"></span><span class="area-rotate-handle e" data-handle="rotate" role="button" aria-label="回転"></span><span class="area-rotate-handle s" data-handle="rotate" role="button" aria-label="回転"></span><span class="area-rotate-handle w" data-handle="rotate" role="button" aria-label="回転"></span></div></div><div id="viewMsg" class="overlay-msg" hidden></div><div id="keyBadge" class="key-badge" hidden></div><div id="toast" class="toast" role="status" aria-live="polite" hidden></div></div>
-      <div id="areaEditControls" class="area-edit-controls" hidden><div id="mediaAreaSizeControls" class="media-area-size-controls" hidden><label><input id="mediaAreaAspectLock" type="checkbox" checked>Lock aspect ratio</label><label>Width (% of canvas)<input id="mediaAreaWidth" type="number" min="0.5" max="400" step="0.5"></label><label>Height (% of canvas)<input id="mediaAreaHeight" type="number" min="0.5" max="400" step="0.5"></label><label id="mediaAreaAngleField">Rotation (°)<input id="mediaAreaAngle" type="number" min="-180" max="180" step="0.1"></label></div><div class="area-edit-actions"><button id="areaResetAuto" class="ghost" type="button">Auto配置</button><button id="areaResetFull" class="ghost" type="button">Full area</button><button id="areaDelete" type="button">削除</button></div><div class="area-edit-confirm"><button id="areaApplyOne" class="primary" disabled>Set placement</button><button id="areaApplyFollowing" disabled>Use this placement from here onward</button><button id="areaCancel" class="ghost">キャンセル</button></div></div>
+      <div class="viewport" id="viewport"><button id="exitPreviewFullscreen" class="fullscreen-exit" type="button">Exit fullscreen</button><div class="fullscreen-transport"><button id="fullscreenPlay" type="button" aria-label="Play">▶</button><span id="fullscreenTime" class="tc"></span><input id="fullscreenScrub" type="range" min="0" max="10000" value="0" aria-label="Playback position"></div><canvas id="view" width="1280" height="720"></canvas><div id="itemFrames" class="item-frames"></div><div id="areaEditOverlay" class="area-edit-overlay" aria-label="Edit position and size" hidden><div id="areaEditRect" class="area-edit-rect"><span class="area-edit-handle nw" data-handle="nw"></span><span class="area-edit-handle ne" data-handle="ne"></span><span class="area-edit-handle sw" data-handle="sw"></span><span class="area-edit-handle se" data-handle="se"></span><span class="area-rotate-handle n" data-handle="rotate" role="button" aria-label="Rotate"></span><span class="area-rotate-handle e" data-handle="rotate" role="button" aria-label="Rotate"></span><span class="area-rotate-handle s" data-handle="rotate" role="button" aria-label="Rotate"></span><span class="area-rotate-handle w" data-handle="rotate" role="button" aria-label="Rotate"></span></div></div><div id="viewMsg" class="overlay-msg" hidden></div><div id="keyBadge" class="key-badge" hidden></div><div id="toast" class="toast" role="status" aria-live="polite" hidden></div></div>
+      <div id="areaEditControls" class="area-edit-controls" hidden><div id="mediaAreaSizeControls" class="media-area-size-controls" hidden><label><input id="mediaAreaAspectLock" type="checkbox" checked>Lock aspect ratio</label><label>Width (% of canvas)<input id="mediaAreaWidth" type="number" min="0.5" max="400" step="0.5"></label><label>Height (% of canvas)<input id="mediaAreaHeight" type="number" min="0.5" max="400" step="0.5"></label><label id="mediaAreaAngleField">Rotation (°)<input id="mediaAreaAngle" type="number" min="-180" max="180" step="0.1"></label></div><div class="area-edit-actions"><button id="areaResetAuto" class="ghost" type="button">Auto layout</button><button id="areaResetFull" class="ghost" type="button">Full area</button><button id="areaDelete" type="button">Delete</button></div><div class="area-edit-confirm"><button id="areaApplyOne" class="primary" disabled>Set placement</button><button id="areaApplyFollowing" disabled>Use this placement from here onward</button><button id="areaCancel" class="ghost">Cancel</button></div></div>
       <div id="tapPanel" class="tapbox" hidden>
         <div class="hint" id="tapHint">Click the button (or press Space) at the moment you want to insert.</div>
         <div class="tap-queue">
@@ -1255,7 +1255,7 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 </dialog>
 
 <dialog id="exportDlg" class="terms export-dialog" aria-labelledby="exportDlgTitle">
- <h2 id="exportDlgTitle">出力</h2>
+ <h2 id="exportDlgTitle">Export</h2>
  <p id="shortExportDescription" class="note" hidden>Keep the original composition centered and fill the space above and below in a 9:16 portrait video.</p>
  <label class="field filename-field">File name<input id="exportFilename" type="text" maxlength="180" autocomplete="off"></label>
  <p class="note">The file extension is added automatically. Unsupported characters are replaced.</p>
@@ -1547,16 +1547,26 @@ J.addUserFont = (key, label, family, weight = 400, kind = 'custom') => {
   J.glyphs.clear();
   J.metrics.clear();
 };
-J.COMPOSITE_PARTS = {
-  kana: 'ひらがな・カタカナ', kanji: '漢字', symbols: '記号', digits: '半角数字', latin: '半角アルファベット', punctuation: '約物', gaiji: '外字',
+/* composite fonts: one font per kind of character. Each UI edition lists the kinds its own writing system uses
+   (Japanese: kana / kanji / 約物 …, Chinese: 汉字 / 标点符号 / 西文字母 …, Korean: 한글 / 한자 / 문장 부호 …);
+   kinds a list leaves out are drawn with the base font. Part keys are shared, so a saved definition works in every edition. */
+J.COMPOSITE_PART_SETS = {
+  ja: [['kana', 'ひらがな・カタカナ'], ['kanji', '漢字'], ['symbols', '記号'], ['digits', '半角数字'], ['latin', '半角アルファベット'], ['punctuation', '約物'], ['gaiji', '外字']],
+  en: [['kana', 'Hiragana / Katakana'], ['kanji', 'Kanji'], ['symbols', 'Symbols'], ['digits', 'Half-width digits'], ['latin', 'Half-width Latin'], ['punctuation', 'Punctuation'], ['gaiji', 'Gaiji']],
+  'zh-Hans': [['kanji', '汉字'], ['punctuation', '标点符号'], ['latin', '西文字母'], ['digits', '数字'], ['symbols', '符号'], ['gaiji', '造字（私用区）']],
+  ko: [['hangul', '한글'], ['kanji', '한자'], ['latin', '영문'], ['digits', '숫자'], ['punctuation', '문장 부호'], ['symbols', '기호'], ['gaiji', '사용자 정의 문자']],
 };
+J.compositeParts = (lang = typeof document !== 'undefined' ? document.documentElement?.lang : 'ja') => J.COMPOSITE_PART_SETS[lang] || J.COMPOSITE_PART_SETS.ja;
+J.COMPOSITE_PARTS = Object.fromEntries(J.COMPOSITE_PART_SETS.ja);
 J.compositeCategory = ch => {
   const cp = ch.codePointAt(0);
   if (/[0-9]/.test(ch) && cp < 128) return 'digits';
   if (/[A-Za-z]/.test(ch) && cp < 128) return 'latin';
-  if (/[、。，．・「」『』（）［］｛｝〈〉《》【】〔〕！？!?,.:;…―\-]/u.test(ch)) return 'punctuation';
-  if (/[\u3040-\u30ff\u31f0-\u31ff\uff66-\uff9f]/u.test(ch)) return 'kana';
-  if (/[\u3400-\u9fff\uf900-\ufaff\u{20000}-\u{3134f}]/u.test(ch)) return 'kanji';
+  if (/[、。，．・「」『』（）［］｛｝〈〉《》【】〔〕！？!?,.:;…―\-“”‘’；：·～]/u.test(ch)) return 'punctuation';
+  if (/[぀-ヿㇰ-ㇿｦ-ﾟ]/u.test(ch)) return 'kana';
+  if (/[가-힣ᄀ-ᇿ㄰-㆏ꥠ-꥿ힰ-퟿]/u.test(ch)) return 'hangul';
+  if (/[㐀-鿿豈-﫿\u{20000}-\u{3134f}]/u.test(ch)) return 'kanji';
+  if (/[À-ɏ]/u.test(ch)) return 'latin';
   if (/[\p{Co}\p{Cs}\u{e0000}-\u{e007f}]/u.test(ch)) return 'gaiji';
   return 'symbols';
 };
@@ -67946,7 +67956,7 @@ function renderCompositeFonts() {
   const selected = base.value; base.innerHTML = choices;
   if (selected && J.FONTS[selected]) base.value = selected;
   const parts = $('compositeParts'), existing = Object.fromEntries([...parts.querySelectorAll('select')].map(el => [el.dataset.part, el.value]));
-  parts.innerHTML = Object.entries(J.COMPOSITE_PARTS).map(([key, label]) => `<label>${label}<select data-part="${key}"><option value="">Use base font</option>${choices}</select></label>`).join('');
+  parts.innerHTML = J.compositeParts().map(([key, label]) => `<label>${label}<select data-part="${key}"><option value="">Use base font</option>${choices}</select></label>`).join('');
   for (const select of parts.querySelectorAll('select')) if (existing[select.dataset.part]) select.value = existing[select.dataset.part];
   $('compositeList').innerHTML = (S.project.compositeFonts || []).map(def => `<div class="composite-saved"><span>${escapeHtml(def.name)}</span><button type="button" data-key="${escapeHtml(def.key)}" aria-label="${escapeHtml(def.name)} remove">×</button></div>`).join('');
 }

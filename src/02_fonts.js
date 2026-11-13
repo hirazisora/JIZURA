@@ -41,16 +41,26 @@ J.addUserFont = (key, label, family, weight = 400, kind = 'custom') => {
   J.glyphs.clear();
   J.metrics.clear();
 };
-J.COMPOSITE_PARTS = {
-  kana: 'ひらがな・カタカナ', kanji: '漢字', symbols: '記号', digits: '半角数字', latin: '半角アルファベット', punctuation: '約物', gaiji: '外字',
+/* composite fonts: one font per kind of character. Each UI edition lists the kinds its own writing system uses
+   (Japanese: kana / kanji / 約物 …, Chinese: 汉字 / 标点符号 / 西文字母 …, Korean: 한글 / 한자 / 문장 부호 …);
+   kinds a list leaves out are drawn with the base font. Part keys are shared, so a saved definition works in every edition. */
+J.COMPOSITE_PART_SETS = {
+  ja: [['kana', 'ひらがな・カタカナ'], ['kanji', '漢字'], ['symbols', '記号'], ['digits', '半角数字'], ['latin', '半角アルファベット'], ['punctuation', '約物'], ['gaiji', '外字']],
+  en: [['kana', 'Hiragana / Katakana'], ['kanji', 'Kanji'], ['symbols', 'Symbols'], ['digits', 'Half-width digits'], ['latin', 'Half-width Latin'], ['punctuation', 'Punctuation'], ['gaiji', 'Gaiji']],
+  'zh-Hans': [['kanji', '汉字'], ['punctuation', '标点符号'], ['latin', '西文字母'], ['digits', '数字'], ['symbols', '符号'], ['gaiji', '造字（私用区）']],
+  ko: [['hangul', '한글'], ['kanji', '한자'], ['latin', '영문'], ['digits', '숫자'], ['punctuation', '문장 부호'], ['symbols', '기호'], ['gaiji', '사용자 정의 문자']],
 };
+J.compositeParts = (lang = typeof document !== 'undefined' ? document.documentElement?.lang : 'ja') => J.COMPOSITE_PART_SETS[lang] || J.COMPOSITE_PART_SETS.ja;
+J.COMPOSITE_PARTS = Object.fromEntries(J.COMPOSITE_PART_SETS.ja);
 J.compositeCategory = ch => {
   const cp = ch.codePointAt(0);
   if (/[0-9]/.test(ch) && cp < 128) return 'digits';
   if (/[A-Za-z]/.test(ch) && cp < 128) return 'latin';
-  if (/[、。，．・「」『』（）［］｛｝〈〉《》【】〔〕！？!?,.:;…―\-]/u.test(ch)) return 'punctuation';
-  if (/[\u3040-\u30ff\u31f0-\u31ff\uff66-\uff9f]/u.test(ch)) return 'kana';
-  if (/[\u3400-\u9fff\uf900-\ufaff\u{20000}-\u{3134f}]/u.test(ch)) return 'kanji';
+  if (/[、。，．・「」『』（）［］｛｝〈〉《》【】〔〕！？!?,.:;…―\-“”‘’；：·～]/u.test(ch)) return 'punctuation';
+  if (/[぀-ヿㇰ-ㇿｦ-ﾟ]/u.test(ch)) return 'kana';
+  if (/[가-힣ᄀ-ᇿ㄰-㆏ꥠ-꥿ힰ-퟿]/u.test(ch)) return 'hangul';
+  if (/[㐀-鿿豈-﫿\u{20000}-\u{3134f}]/u.test(ch)) return 'kanji';
+  if (/[À-ɏ]/u.test(ch)) return 'latin';
   if (/[\p{Co}\p{Cs}\u{e0000}-\u{e007f}]/u.test(ch)) return 'gaiji';
   return 'symbols';
 };

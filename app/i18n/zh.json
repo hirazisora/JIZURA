@@ -36,6 +36,7 @@
 "<button id=\"btnApplyThemes\" type=\"button\">Apply</button>": "<button id=\"btnApplyThemes\" type=\"button\">应用</button>",
 "<button id=\"btnCreateProject\" type=\"button\">Create</button>": "<button id=\"btnCreateProject\" type=\"button\">创建</button>",
 "<button value=\"cancel\">Cancel</button>": "<button value=\"cancel\">取消</button>",
+"id=\"areaCancel\" class=\"ghost\">Cancel<": "id=\"areaCancel\" class=\"ghost\">取消<",
 "<code>*emphasis*</code> … a larger automatic area, displayed above the foreground without avoiding it.": "<code>*强调*</code> … 更大的自动区域，显示在前景之上且不避开前景。",
 "<code>First line\\nSecond line</code> … <code>\\n</code> adds a line break within one cut (use <code>\\\\n</code> to display it literally).": "<code>第一行\\n第二行</code> … <code>\\n</code> 在一个镜头内换行（用 <code>\\\\n</code> 可原样显示）。",
 "<code>{-</code> and <code>-}</code> around lines … retain successive lyrics while avoiding overlaps.": "用 <code>{-</code> 和 <code>-}</code> 包住多行 … 依次保留歌词并避免相互重叠。",
@@ -3261,5 +3262,6 @@
 "←☆ Apply": "←☆ 应用",
 "↶ Undo": "↶ 撤销",
 "↷ Redo": "↷ 重做",
-"☆ Favorite effects": "☆ 收藏的效果"
+"☆ Favorite effects": "☆ 收藏的效果",
+"Auto layout": "自动布局"
 }

@@ -19,14 +19,22 @@ for(const [dir,code,label] of editions){
       kanaNames:names.filter(n=>kana.test(n)).length,latinNames:names.filter(latinOnly).length,names:names.length,
       kanaTech:tech.filter(n=>kana.test(n)).length,latinTech:tech.filter(latinOnly).length,tech:tech.length,
       kanaText:text.filter(t=>kana.test(t)),latinText:text.filter(latinOnly).length,text:text.length,
-      label:J.mediaLabel('前景','Foreground'),sample:J.SAMPLE_LYRICS.split('\n')[0],style:J.STYLES.noir.name};
+      hanText:[...new Set(text.filter(t=>/[㐀-鿿]/.test(t)))],composite:[...document.querySelectorAll('#compositeParts label')].map(l=>l.firstChild.textContent),areaCancel:document.getElementById('areaCancel').textContent,cats:['한','ㅎ','漢','あ','A','1','“','，','é'].map(J.compositeCategory),label:J.mediaLabel('前景','Foreground'),sample:J.SAMPLE_LYRICS.split('\n')[0],style:J.STYLES.noir.name};
   });
   assert.equal(r.lang,code,dir+' html lang');
   assert.deepEqual(r.items.map(i=>i.text),['日本語','English','简体中文','한국어'],dir+' switcher order');
   const current=r.items.filter(i=>i.current==='page');assert.equal(current.length,1,dir+' one current language');assert.equal(current[0].text,label,dir+' current language');
   const up=dir?'../':'';const hrefs={'日本語':up+'index.html','English':up+'en/index.html','简体中文':up+'zh/index.html','한국어':up+'ko/index.html'};
   for(const i of r.items)if(i.current!=='page')assert.equal(i.href,hrefs[i.text],dir+' link '+i.text);
-  if(code==='zh-Hans'||code==='ko'){
+  const composite={ja:['ひらがな・カタカナ','漢字','記号','半角数字','半角アルファベット','約物','外字'],en:['Hiragana / Katakana','Kanji','Symbols','Half-width digits','Half-width Latin','Punctuation','Gaiji'],
+    'zh-Hans':['汉字','标点符号','西文字母','数字','符号','造字（私用区）'],ko:['한글','한자','영문','숫자','문장 부호','기호','사용자 정의 문자']}[code];
+  assert.deepEqual(r.composite,composite,dir+' composite font parts');
+  assert.deepEqual(r.cats,['hangul','hangul','kanji','kana','latin','digits','punctuation','punctuation','latin'],dir+' composite categories');
+  assert.equal(r.areaCancel,{ja:'キャンセル',en:'Cancel','zh-Hans':'取消',ko:'취소'}[code],dir+' area cancel');
+    if(code==='zh-Hans'||code==='ko'){
+    // Korean is written in hangul, so any Han text there is Japanese copy left behind (zh shares most kanji words with ja)
+    const leftover=code==='ko'?r.hanText.filter(t=>!['日本語','简体中文','繁體中文'].includes(t)&&!/^字面/.test(t)):[];
+    assert.deepEqual(leftover,[],dir+' Japanese text left untranslated '+JSON.stringify(leftover));
     assert.equal(r.kanaNames,0,dir+' part names with kana');assert.equal(r.kanaTech,0,dir+' media techniques with kana');
     assert.ok(r.latinNames<=r.names*0.02,dir+' untranslated part names '+r.latinNames+'/'+r.names);
     assert.ok(r.latinTech<=r.tech*0.02,dir+' untranslated media techniques '+r.latinTech+'/'+r.tech);

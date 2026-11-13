@@ -34,6 +34,7 @@
 "<button id=\"btnApplyThemes\" type=\"button\">Apply</button>": "<button id=\"btnApplyThemes\" type=\"button\">적용</button>",
 "<button id=\"btnCreateProject\" type=\"button\">Create</button>": "<button id=\"btnCreateProject\" type=\"button\">만들기</button>",
 "<button value=\"cancel\">Cancel</button>": "<button value=\"cancel\">취소</button>",
+"id=\"areaCancel\" class=\"ghost\">Cancel<": "id=\"areaCancel\" class=\"ghost\">취소<",
 "<code>*emphasis*</code> … a larger automatic area, displayed above the foreground without avoiding it.": "<code>*강조*</code> … 더 큰 자동 영역. 전경을 피하지 않고 전경 위에 표시합니다.",
 "<code>First line\\nSecond line</code> … <code>\\n</code> adds a line break within one cut (use <code>\\\\n</code> to display it literally).": "<code>첫째 줄\\n둘째 줄</code> … <code>\\n</code>은 한 컷 안에서 줄을 바꿉니다(그대로 표시하려면 <code>\\\\n</code>).",
 "<code>{-</code> and <code>-}</code> around lines … retain successive lyrics while avoiding overlaps.": "여러 줄을 <code>{-</code>와 <code>-}</code>로 감싸면 … 가사를 차례로 남기면서 겹치지 않게 합니다.",
@@ -3259,5 +3260,6 @@
 "←☆ Apply": "←☆ 적용",
 "↶ Undo": "↶ 실행 취소",
 "↷ Redo": "↷ 다시 실행",
-"☆ Favorite effects": "☆ 즐겨찾기 연출"
+"☆ Favorite effects": "☆ 즐겨찾기 연출",
+"Auto layout": "자동 배치"
 }

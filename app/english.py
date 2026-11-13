@@ -27,6 +27,8 @@ BODY = {
     '素材入りプロジェクト（.jizuraichi）を開く': 'Open a portable project (.jizuraichi)',
     '画像・動画・音声を含むプロジェクトを保存': 'Save project with images, videos and audio',
     '新規プロジェクト': 'New project', '新規': 'New', '<button value="cancel">キャンセル</button>': '<button value="cancel">Cancel</button>',
+    '自動配置': 'Auto layout', '回転': 'Rotate', '削除': 'Delete', '出力': 'Export',
+    'id="areaCancel" class="ghost">キャンセル<': 'id="areaCancel" class="ghost">Cancel<',
     '現在の内容を残す場合は、先に保存してください！': 'Save first if you want to keep your current work!',
     '<button id="btnCreateProject" type="button">作成</button>': '<button id="btnCreateProject" type="button">Create</button>',
 
