@@ -564,19 +564,25 @@ FORK_MEDIA = dict(FORK_UI, **{
 })
 
 
-def localize_body(source):
+def localize_body(source, table=None):
+    """English body copy; with a translation table (English -> zh/ko) the English copy is translated once more."""
+    t = (lambda text: text) if table is None else (lambda text: table.get(text, text))
     source = source.replace('href="manual/"', 'href="../manual/?lang=en"')
-    source = source.replace('マニュアル（別タブで開く）', 'Manual (opens in a new tab)').replace('このサイトについて', 'About this site').replace('使い方', 'Help').replace('マニュアル', 'Manual')
+    source = (source.replace('マニュアル（別タブで開く）', t('Manual (opens in a new tab)')).replace('このサイトについて', t('About this site'))
+              .replace('使い方', t('Help')).replace('マニュアル', t('Manual')))
     # One longest-first pass over both glossaries (fork labels win on duplicates): short words from either
     # (歌詞, 前景, 追加 …) can never split a longer label or sentence from the other.
-    return replace_copy(source, {**BODY, **FORK_BODY}).replace('You own the<strong>', 'You own the <strong>')
+    source = replace_copy(source, {japanese: t(english) for japanese, english in {**BODY, **FORK_BODY}.items()})
+    return source.replace('You own the<strong>', 'You own the <strong>')
 
 
-def localize_js(source, filename):
+def localize_js(source, filename, table=None):
+    t = (lambda text: text) if table is None else (lambda text: table.get(text, text))
+    tr = lambda glossary: {japanese: t(english) for japanese, english in glossary.items()}
     if filename.endswith('12_ui.js'):
-        return replace_copy(replace_copy(source, FORK_UI), UI)
+        return replace_copy(replace_copy(source, tr(FORK_UI)), tr(UI))
     if filename.endswith('08d_media.js'):
-        return replace_copy(source, FORK_MEDIA)
+        return replace_copy(source, tr(FORK_MEDIA))
     if filename.endswith('11_export.js'):
-        return replace_copy(source, EXPORT)
+        return replace_copy(source, tr(EXPORT))
     return source

@@ -31,7 +31,7 @@ class Handler(SimpleHTTPRequestHandler):
     def send_head(self):
         path = urlsplit(self.path).path
         pages = {'/': 'index.html', '/index.html': 'index.html',
-                 '/en/': 'en/index.html', '/en/index.html': 'en/index.html'}
+                 **{f'/{lang}/{name}': f'{lang}/index.html' for lang in ('en', 'zh', 'ko') for name in ('', 'index.html')}}
         if path == '/favicon.ico':
             return super().send_head()
         if path not in pages:

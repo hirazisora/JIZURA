@@ -1,7 +1,14 @@
 /* Media techniques: seeded recipes, transparent masks and canvas-local motion. */
 (() => {
 'use strict';
-J.mediaLabel = (ja, en) => typeof document !== 'undefined' && document.documentElement?.lang === 'en' ? en : ja;
+// UI language comes from <html lang>: ja shows the Japanese copy, en the English copy, and the zh/ko editions
+// look the English copy up in the translation table their build puts in globalThis.JIZURA_I18N (English as fallback).
+J.mediaLabel = (ja, en) => {
+  const lang = typeof document !== 'undefined' ? document.documentElement?.lang : '';
+  if (lang === 'en') return en;
+  const table = lang && lang !== 'ja' && globalThis.JIZURA_I18N?.t;
+  return table ? (table[en] ?? en) : ja;
+};
 const label = J.mediaLabel;
 J.MEDIA_TECH = {};
 const add = (key, ja, en, group, enter, hold, exit, treat = 'none', trans = 'none') => {

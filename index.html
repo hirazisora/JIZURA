@@ -8,6 +8,8 @@
 <link rel="canonical" href="https://hirazisora.github.io/JIZURA/">
 <link rel="alternate" hreflang="ja" href="https://hirazisora.github.io/JIZURA/">
 <link rel="alternate" hreflang="en" href="https://hirazisora.github.io/JIZURA/en/">
+<link rel="alternate" hreflang="zh-Hans" href="https://hirazisora.github.io/JIZURA/zh/">
+<link rel="alternate" hreflang="ko" href="https://hirazisora.github.io/JIZURA/ko/">
 <meta property="og:type" content="website">
 <meta property="og:title" content="字面一 JIZURA ONE STOP EDITION">
 <meta property="og:description" content="歌詞を入れると文字PV（リリックモーション）を自動で組み立てて MP4 に書き出すブラウザアプリ">
@@ -60,6 +62,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .lang-switch a:hover { color: var(--text); background: var(--raised2); }
 .lang-switch [aria-current=page] { color: var(--ink); background: var(--amber); }
 html[lang=en] { --ui: system-ui, -apple-system, "Segoe UI", sans-serif; --brand: Georgia, "Times New Roman", serif; }
+html[lang=zh-Hans] { --ui: "Noto Sans SC", "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", system-ui, sans-serif; }
+html[lang=ko] { --ui: "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif; }
 html[lang=en] .work { grid-template-columns: minmax(315px, 365px) minmax(0, 1fr) minmax(350px, 395px); }
 html[lang=en] .slider { grid-template-columns: 124px minmax(0, 1fr) 36px; }
 html[lang=en] .now-row { grid-template-columns: 105px minmax(0, 1fr); }
@@ -922,7 +926,7 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
       <input id="songArtist" type="text" placeholder="アーティスト" aria-label="アーティスト">
       <input id="projectName" type="text" placeholder="プロジェクト名" aria-label="プロジェクト名" title="プロジェクト保存時のファイル名。保存すると更新されます">
     </div>
-    <nav class="lang-switch" aria-label="言語"><span aria-current="page">日本語</span><a href="en/index.html" lang="en">English</a></nav>
+    <nav class="lang-switch" aria-label="言語"><span aria-current="page">日本語</span><a href="en/index.html" lang="en">English</a><a href="zh/index.html" lang="zh-Hans">简体中文</a><a href="ko/index.html" lang="ko">한국어</a></nav>
     <div class="acts">
       <details class="header-menu" id="projectMenu">
         <summary>プロジェクト</summary><div class="header-menu-items">
@@ -6575,7 +6579,14 @@ J.lyricRenderCut = cut => cut.displayEnd != null ? Object.assign({}, cut, {
 /* Media techniques: seeded recipes, transparent masks and canvas-local motion. */
 (() => {
 'use strict';
-J.mediaLabel = (ja, en) => typeof document !== 'undefined' && document.documentElement?.lang === 'en' ? en : ja;
+// UI language comes from <html lang>: ja shows the Japanese copy, en the English copy, and the zh/ko editions
+// look the English copy up in the translation table their build puts in globalThis.JIZURA_I18N (English as fallback).
+J.mediaLabel = (ja, en) => {
+  const lang = typeof document !== 'undefined' ? document.documentElement?.lang : '';
+  if (lang === 'en') return en;
+  const table = lang && lang !== 'ja' && globalThis.JIZURA_I18N?.t;
+  return table ? (table[en] ?? en) : ja;
+};
 const label = J.mediaLabel;
 J.MEDIA_TECH = {};
 const add = (key, ja, en, group, enter, hold, exit, treat = 'none', trans = 'none') => {

@@ -2,7 +2,8 @@
 
 **AIエージェントから制作する：** [ローカルMCPの設定・操作ガイド](mcp/README.md)
 
-**English edition:** [Open the fork app](https://hirazisora.github.io/JIZURA/en/) · [English guide](README.en.md)
+**English edition:** [Open the fork app](https://hirazisora.github.io/JIZURA/en/) · [English guide](README.en.md)  
+**简体中文版:** [打开应用](https://hirazisora.github.io/JIZURA/zh/) · **한국어판:** [앱 열기](https://hirazisora.github.io/JIZURA/ko/)
 
 **▶ ブラウザで使う：<https://hirazisora.github.io/JIZURA/>**　／　AE パネル：[JIZURA_AE.jsx をダウンロード](https://hirazisora.github.io/JIZURA/JIZURA_AE.jsx)（リンク先を右クリック →「名前を付けてリンク先を保存」）
 
