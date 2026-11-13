@@ -43,6 +43,17 @@ for(const [dir,code,label] of editions){
     assert.equal(r.label,code==='ko'?'전경':'前景');
     assert.ok(!/[A-Za-z]{3}/.test(r.sample)&&!/[\u3040-\u30ff]/.test(r.sample),dir+' sample lyrics '+r.sample);
     assert.ok(!/[A-Za-z]{3}/.test(r.style),dir+' style name '+r.style);
+    // dialogs built at run time: theme dialog and cut details (every tab); only font names and units may stay Latin
+    const dialogText=async()=>page.evaluate(()=>{const out=new Set();document.querySelectorAll('dialog[open] *').forEach(e=>{if(!e.getClientRects().length&&e.tagName!=='OPTION')return;for(const n of e.childNodes)if(n.nodeType===3&&n.textContent.trim())out.add(n.textContent.trim());});return [...out];});
+    const seen=new Set(),add=a=>a.forEach(t=>seen.add(t));
+    await page.click('#btnThemes');add(await dialogText());await page.keyboard.press('Escape');
+    await page.locator('#timelineLinks [data-action="menu"][data-layer="lyrics"]').first().click();await page.click('#timelineCutMenu [data-action="details"]');await page.locator('#cutDetailsDialog').waitFor({state:'visible'});
+    for(const tab of await page.locator('#cutDetailsDialog [role=tab]').all()){await tab.click();add(await dialogText());}
+    const fonts=/Sans|Serif|Gothic|Mincho|One\b|Maru|Mono|Rounded|Syuku|Tokumin|ZCOOL|Zheng|Hyeon|Script|Dodum|Batang|^Jua$|^(fps|HUD|BPM)$/;
+    const leftovers=[...seen].filter(t=>/[぀-ヿ]/.test(t)||/[A-Za-z]{3}/.test(t)&&/^[\x20-\x7e…–—’()（）%：:·/\-]+$/.test(t)&&!fonts.test(t));
+    assert.deepEqual(leftovers,[],dir+' untranslated dialog text '+JSON.stringify(leftovers));
+    assert.ok(!/^(.)\1/.test(await page.getAttribute('#songTitle','placeholder')),dir+' song title placeholder translated once');
+    assert.equal(await page.getAttribute('#manualLink','href'),'../manual/'+dir,dir+' manual link');
   }else{
     assert.equal(r.label,code==='en'?'Foreground':'前景',dir+' mediaLabel');
   }

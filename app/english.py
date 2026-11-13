@@ -1,4 +1,5 @@
 """English copy for the browser edition. The Japanese source stays authoritative."""
+import re
 
 BODY = {
     'href="THIRD_PARTY_NOTICES.md"': 'href="../THIRD_PARTY_NOTICES.md"',
@@ -364,11 +365,22 @@ def localize_ae(source):
             .replace('preferredSize.width = 70', 'preferredSize.width = 95'))
 
 
-def replace_copy(source, glossary):
+def replace_copy(source, glossary, slots=None):
     # Longest first protects complete phrases from shorter label replacements.
+    # With slots (zh / ko builds) each phrase is first swapped for a private-use marker and filled in by fill_slots:
+    # Chinese copy shares kanji with the Japanese keys, so translated text must never be scanned again
+    # (otherwise 曲名 -> 歌曲名 turns the already translated 歌曲名（…） into 歌歌曲名（…）).
     for japanese, english in sorted(glossary.items(), key=lambda pair: -len(pair[0])):
-        source = source.replace(japanese, english)
+        if slots is None:
+            source = source.replace(japanese, english)
+        elif japanese in source:
+            slots.append(english)
+            source = source.replace(japanese, chr(0xF0000 + len(slots) - 1))
     return source
+
+
+def fill_slots(source, slots):
+    return re.sub('[\U000F0000-\U000FFFFD]', lambda m: slots[ord(m.group(0)) - 0xF0000], source) if slots else source
 
 
 # Fork UI text is translated before the original glossary so short common
@@ -566,25 +578,28 @@ FORK_MEDIA = dict(FORK_UI, **{
 })
 
 
-def localize_body(source, table=None):
+def localize_body(source, table=None, manual='../manual/?lang=en'):
     """English body copy; with a translation table (English -> zh/ko) the English copy is translated once more."""
     t = (lambda text: text) if table is None else (lambda text: table.get(text, text))
-    source = source.replace('href="manual/"', 'href="../manual/?lang=en"')
-    source = (source.replace('マニュアル（別タブで開く）', t('Manual (opens in a new tab)')).replace('このサイトについて', t('About this site'))
-              .replace('使い方', t('Help')).replace('マニュアル', t('Manual')))
+    slots = None if table is None else []
+    source = source.replace('href="manual/"', 'href="' + manual + '"')
+    source = replace_copy(source, {'マニュアル（別タブで開く）': t('Manual (opens in a new tab)'), 'このサイトについて': t('About this site')}, slots)
+    source = replace_copy(source, {'使い方': t('Help')}, slots)
+    source = replace_copy(source, {'マニュアル': t('Manual')}, slots)
     # One longest-first pass over both glossaries (fork labels win on duplicates): short words from either
     # (歌詞, 前景, 追加 …) can never split a longer label or sentence from the other.
-    source = replace_copy(source, {japanese: t(english) for japanese, english in {**BODY, **FORK_BODY}.items()})
-    return source.replace('You own the<strong>', 'You own the <strong>')
+    source = replace_copy(source, {japanese: t(english) for japanese, english in {**BODY, **FORK_BODY}.items()}, slots)
+    return fill_slots(source, slots).replace('You own the<strong>', 'You own the <strong>')
 
 
 def localize_js(source, filename, table=None):
     t = (lambda text: text) if table is None else (lambda text: table.get(text, text))
     tr = lambda glossary: {japanese: t(english) for japanese, english in glossary.items()}
+    slots = None if table is None else []
     if filename.endswith('12_ui.js'):
-        return replace_copy(replace_copy(source, tr(FORK_UI)), tr(UI))
-    if filename.endswith('08d_media.js'):
-        return replace_copy(source, tr(FORK_MEDIA))
-    if filename.endswith('11_export.js'):
-        return replace_copy(source, tr(EXPORT))
-    return source
+        source = replace_copy(replace_copy(source, tr(FORK_UI), slots), tr(UI), slots)
+    elif filename.endswith('08d_media.js'):
+        source = replace_copy(source, tr(FORK_MEDIA), slots)
+    elif filename.endswith('11_export.js'):
+        source = replace_copy(source, tr(EXPORT), slots)
+    return fill_slots(source, slots)

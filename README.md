@@ -354,6 +354,7 @@ python3 build.py              # src/ app/ vendor/ → index.html
 node tools/export_ae_data.js  # src/ を変えたとき：ae/data.json（AE パネルが使うスタイル・部品の情報）を更新
 python3 build_ae.py           # ae/（本体 + 移植済みパック ae/p_*.jsx）→ JIZURA_AE.jsx
 python3 build_cep.py          # index.html + ae/ + cep/ → build/com.852wa.jizura/ と build/JIZURA_CEP.zip（公開用は直下にコピー）
+node tools/manual/build_manual.cjs zh ko  # 中国語・韓国語のマニュアル（manual/zh/, manual/ko/）を、各言語版の画面を撮って作り直す（要 Playwright・preview_server.py）
 ```
 ビルドに必要なのは Python 3 と Node.js だけです（npm パッケージは不要）。AE パネルのテスト（AE のオブジェクトモデルを模した環境で全スタイルを組み立てる）は `cd dev && npm install` のあと `node dev/ae_test.js` で実行できます。表現部品を追加するときは `docs/EXPRESSION_PACKS.md` を参照してください（テスト用ツールは `dev/`）。
 

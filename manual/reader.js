@@ -3,7 +3,7 @@
 const $=id=>document.getElementById(id),params=new URLSearchParams(location.search),english=params.get('lang')==='en',links=[...document.querySelectorAll('#manualToc a')],pages=[...document.querySelectorAll('.manual-page')];let current=1;
 const copy=english?{manual:'Manual',contents:'Contents',close:'Close',pdf:'Open PDF',home:'Back to JIZURA',previous:'Previous',next:'Next',zoom:'View',skip:'Skip to pages',hint:'Close this tab to return to the editor.',footer:'19 pages · Japanese PDF',download:'Download PDF'}:null;
 if(copy){document.documentElement.lang='en';document.title='JIZURA — Manual';document.querySelectorAll('[data-copy]').forEach(el=>el.textContent=copy[el.dataset.copy]);$('tocToggle').setAttribute('aria-label','Open contents');$('manualToc').setAttribute('aria-label','Manual contents');$('manualPages').setAttribute('aria-label','Manual pages');}
-$('editorLink').href=english&&params.get('edition')!=='cep'?'../en/index.html':'../index.html';
+$('editorLink').href=document.body.dataset.editor||(english&&params.get('edition')!=='cep'?'../en/index.html':'../index.html');  // zh / ko manuals name their own edition
 const compact=matchMedia('(max-width:850px)');
 function toggleContents(open,returnFocus=false){$('manualToc').classList.toggle('is-open',open);$('tocBackdrop').hidden=!open;$('tocToggle').setAttribute('aria-expanded',String(open));document.body.classList.toggle('toc-open',open);if(open){$('tocClose').focus();}else if(returnFocus){$('tocToggle').focus();}}
 $('tocToggle').onclick=()=>toggleContents($('tocToggle').getAttribute('aria-expanded')!=='true');$('tocClose').onclick=()=>toggleContents(false,true);$('tocBackdrop').onclick=()=>toggleContents(false,true);

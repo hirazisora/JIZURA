@@ -193,7 +193,7 @@
     .replace(/([0-9])([A-Za-z])/g, '$1 $2')
     .replace(/_/g, ' ').split(' ').map((part, i) => acronym[part.toLowerCase()] || (i ? part.toLowerCase() : part.charAt(0).toUpperCase() + part.slice(1))).join(' ');
   for (const group of J.GROUP_KEYS) {
-    for (const key of J.order(group)) {
+    for (const key of Object.keys(J.registry(group))) {  // every entry, including specials such as the title-card layout
       const item = J.registry(group)[key];
       // keep the Japanese name for the fuzzy search; 追加分2 parts carry their own English name (en)
       if (item) { item.ja ??= item.name; item.name = (titles[group] || {})[key] || item.en || label(key); }

@@ -7,7 +7,11 @@ J.mediaLabel = (ja, en) => {
   const lang = typeof document !== 'undefined' ? document.documentElement?.lang : '';
   if (lang === 'en') return en;
   const table = lang && lang !== 'ja' && globalThis.JIZURA_I18N?.t;
-  return table ? (table[en] ?? en) : ja;
+  if (!table) return ja;
+  if (table[en] != null) return table[en];
+  // numbered copy built at run time ("Remove 2", "Font 1", "C factor"): look up "Remove {0}" and put the numbers back
+  const values = [], pattern = String(en).replace(/\b(\d+|[A-Z])\b/g, m => `{${values.push(m) - 1}}`);
+  return values.length && table[pattern] != null ? table[pattern].replace(/\{(\d+)\}/g, (_, i) => values[i]) : en;
 };
 const label = J.mediaLabel;
 J.MEDIA_TECH = {};

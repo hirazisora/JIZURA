@@ -39,7 +39,7 @@ def build(lang):
     title = '字面一 JIZURA ONE STOP EDITION'
     canonical = SITE + folder
     body = read('app/body.html').replace('    <div class="acts">', '    ' + language_nav(lang) + '\n    <div class="acts">', 1)
-    if translated: body = localize_body(body, table)
+    if translated: body = localize_body(body, table, f'../manual/{lang}/' if table else '../manual/?lang=en')
     script = '\n'.join(localize_js(read(f), f, table) for f in sources) if translated else js
     if translated:
         marker = '/* ============================================================\n   JIZURA — editor UI'

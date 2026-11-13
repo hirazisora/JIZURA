@@ -7,7 +7,7 @@
   if (!table) return;
   const tr = text => typeof text === 'string' && table[text] != null ? table[text] : text;
   for (const group of J.GROUP_KEYS) {
-    for (const key of J.order(group)) {
+    for (const key of Object.keys(J.registry(group))) {  // every entry, including specials such as the title-card layout
       const item = J.registry(group)[key];
       if (item) item.name = tr(item.name);
     }
