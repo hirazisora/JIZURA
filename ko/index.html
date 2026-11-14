@@ -5870,22 +5870,34 @@ J.attachMedia = async (item, file, assets = J.mediaAssets, onProgress = () => {}
 };
 const previewVideoWarmups = new WeakMap();
 const iosVideoPlayback = typeof navigator !== 'undefined' && (/iPhone|iPad|iPod/.test(navigator.userAgent) || navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+// Requested times that could only be shown from a slightly earlier frame (see the tail fallback below).
+const videoTailSubstitutes = new WeakMap();
 const seekMediaVideo = async (v, target, signal, name = '') => {
   const warming=previewVideoWarmups.get(v);
   if(warming&&warming.signal!==signal){warming.abort();previewVideoWarmups.delete(v);}
   v.pause(); v.playbackRate = 1; target = Math.max(0, Math.min(target, (v.duration || 1) - 0.001));
   if (signal?.aborted)throw new Error('Cancelled');
   if (Math.abs(v.currentTime - target) < 0.002 && v.readyState >= 2 && !v.seeking) return;
+  const substitute=videoTailSubstitutes.get(v);
+  if (substitute && Math.abs(substitute.target - target) < 0.002 && Math.abs(v.currentTime - substitute.time) < 0.002 && v.readyState >= 2 && !v.seeking) return;
+  videoTailSubstitutes.delete(v);
   await new Promise((resolve, reject) => {
-    let done=false,poll,wakeTimer;
-    const finish = () => {done=true;clearTimeout(timer);clearTimeout(wakeTimer);clearInterval(poll);v.pause();v.removeEventListener('seeked',ok);v.removeEventListener('loadeddata',ok);v.removeEventListener('canplay',ok);v.removeEventListener('error',fail);if(signal)signal.removeEventListener('abort',abort);};
+    let done=false,poll,wakeTimer,tailTimer,want=target;
+    const finish = () => {done=true;clearTimeout(timer);clearTimeout(wakeTimer);clearTimeout(tailTimer);clearInterval(poll);v.pause();v.removeEventListener('seeked',ok);v.removeEventListener('loadeddata',ok);v.removeEventListener('canplay',ok);v.removeEventListener('error',fail);if(signal)signal.removeEventListener('abort',abort);};
     // Mobile decoders may need playback through the rewind too. Pause only
     // after the requested frame is available, otherwise the seek can stall.
     // A seek into the last frame may settle at the very end (showing that frame); re-seeking would loop.
-    const ok = () => {if(done||v.readyState<2||v.seeking)return;const atEnd=v.duration-v.currentTime<.002&&v.duration-target<.5;if(Math.abs(v.currentTime-target)>.02&&!atEnd){v.currentTime=target;return;}finish();resolve();};
+    const ok = () => {if(done||v.readyState<2||v.seeking)return;const atEnd=v.duration-v.currentTime<.002&&v.duration-target<.5;if(Math.abs(v.currentTime-want)>.02&&!atEnd){v.currentTime=want;return;}if(want!==target)videoTailSubstitutes.set(v,{target,time:v.currentTime});finish();resolve();};
     const fail = () => {if(done)return;finish();reject(new Error(J.mediaLabel('動画の再生位置を準備できませんでした','Could not prepare video playback position') + (name ? '：' + name : '') + ` (${target.toFixed(3)}s; readyState=${v.readyState}; mediaError=${v.error?.code || 0})`));};
     const abort = () => {if(done)return;finish();reject(new Error('Cancelled'));};
     const timer=setTimeout(fail,15000);
+    // The container can outlast the video track (e.g. a slightly longer audio
+    // track), so a time just before the end may have no frame. Safari then
+    // stays at HAVE_METADATA. Near the end, step back to the last frame that
+    // decodes instead of failing the export.
+    const tailSteps=[1/30,.1,.25,.5];
+    const stepBack=()=>{if(done)return;if(v.readyState>=2&&!v.seeking){ok();if(done)return;}const step=tailSteps.shift();if(step==null)return;want=Math.max(0,target-step);try{v.currentTime=want;}catch{}if(v.readyState<2&&v.paused)wakeDecoder();tailTimer=setTimeout(stepBack,1200);};
+    if(Number.isFinite(v.duration)&&v.duration-target<.6)tailTimer=setTimeout(stepBack,1200);
     // Some mobile decoders finish a seek without delivering a seeked/canplay
     // event. Check readiness as well, and stop polling as soon as it settles.
     poll=setInterval(()=>{if(v.error)fail();else ok();},16);
