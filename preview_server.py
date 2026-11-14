@@ -9,6 +9,7 @@ import subprocess
 from urllib.parse import urlsplit
 
 ROOT = Path(__file__).resolve().parent
+MANUAL = ROOT / 'manual'
 
 
 def branch_name():
@@ -34,6 +35,13 @@ class Handler(SimpleHTTPRequestHandler):
                  **{f'/{lang}/{name}': f'{lang}/index.html' for lang in ('en', 'zh', 'ko') for name in ('', 'index.html')}}
         if path == '/favicon.ico':
             return super().send_head()
+        # The help menu opens the manual reader; serve its static files so the link works locally.
+        if path in ('/manual', '/manual/') or path.startswith('/manual/'):
+            target = Path(self.translate_path(self.path)).resolve()
+            if target == MANUAL or MANUAL in target.parents:
+                return super().send_head()
+            self.send_error(404)
+            return None
         if path not in pages:
             self.send_error(404)
             return None
